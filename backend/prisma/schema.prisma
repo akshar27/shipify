@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String                @id @default(uuid())
+  name             String
+  email            String                @unique
+  password         String
+  role             String
+  createdAt        DateTime              @default(now())
+  deliveries       Delivery[]
+  trips            Trip[]
+  deliveryRequests DeliveryRequest[]     @relation("UserRequests")
+  isVerified       Boolean               @default(false)
+  verifications    VerificationRequest[]
+  documentUrl      String?
+
+  givenRatings     Rating[]  @relation("GivenRatings")
+  receivedRatings  Rating[]  @relation("ReceivedRatings")
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+}
+
+model Delivery {
+  id          String            @id @default(uuid())
+  senderId    String
+  sender      User              @relation(fields: [senderId], references: [id])
+  pickup      String
+  dropoff     String
+  pickupLat   Float?            // ← new
+  pickupLng   Float?            // ← new
+  dropoffLat  Float?            // ← new
+  dropoffLng  Float?            // ← new
+  itemType    String
+  size        String
+  weight      Float
+  status      String            @default("pending")
+  createdAt   DateTime          @default(now())
+  requests    DeliveryRequest[] @relation("DeliveryRequests")
+  ratings     Rating[]
+  messages    Message[]
+}
+
+
+model Trip {
+  id         String   @id @default(uuid())
+  travelerId String
+  traveler   User     @relation(fields: [travelerId], references: [id])
+  start      String
+  startLat   Float?   // ← new
+  startLng   Float?   // ← new
+  end        String
+  endLat     Float?   // ← new
+  endLng     Float?   // ← new
+  departure  DateTime
+  createdAt  DateTime @default(now())
+}
+
+
+model DeliveryRequest {
+  id         String   @id @default(uuid())
+  deliveryId String
+  travelerId String
+  status     String   @default("pending")
+  createdAt  DateTime @default(now())
+
+  delivery Delivery @relation("DeliveryRequests", fields: [deliveryId], references: [id])
+  traveler User     @relation("UserRequests", fields: [travelerId], references: [id])
+}
+
+model VerificationRequest {
+  id          String   @id @default(uuid())
+  userId      String
+  fullName    String
+  documentUrl String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model Rating {
+  id         String   @id @default(uuid())
+  deliveryId String
+  raterId    String
+  receiverId String
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id])
+  rater    User     @relation("GivenRatings", fields: [raterId], references: [id])
+  receiver User     @relation("ReceivedRatings", fields: [receiverId], references: [id])
+}
+
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  deliveryId String
+  content    String
+  createdAt  DateTime @default(now())
+
+  sender   User     @relation("SentMessages", fields: [senderId], references: [id])
+  receiver User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
+  delivery Delivery @relation(fields: [deliveryId], references: [id])
+}
