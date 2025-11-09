@@ -1,0 +1,39 @@
+name: Deploy Shipify (Fullstack)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/shipify
+            git fetch origin main
+            git reset --hard origin/main
+
+            cd backend
+            npm install --production
+            npx prisma generate
+            pm2 restart shipify-backend || pm2 start app.js --name shipify-backend
+            cd ..
+
+            cd frontend
+            npm install
+            npm run build
+            sudo rm -rf /var/www/shipify-frontend/*
+            sudo cp -r build/* /var/www/shipify-frontend/
+            sudo systemctl restart nginx
+            echo "✅ Shipify deployed successfully!"
