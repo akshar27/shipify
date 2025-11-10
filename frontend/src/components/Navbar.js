@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
-import { FaUserCircle } from "react-icons/fa"; // import icon
+import { FaUserCircle } from "react-icons/fa";
+import logo from "../assets/shipify_logo.png";
 
 export default function Navbar() {
   const token = localStorage.getItem("token");
@@ -20,7 +21,15 @@ export default function Navbar() {
           style={{ cursor: 'pointer' }}
           onClick={() => navigate(token ? (user?.role === "admin" ? "/admin" : "/dashboard") : '/')}
         >
-          Shipify
+          <img
+            src={logo}
+            alt="Shipify Logo"
+            width="32"
+            height="32"
+            className="me-2 rounded-circle"
+            style={{ background: "white", padding: "3px" }}
+          />
+          <span className="text-white">Shipify</span>
         </span>
 
         <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
