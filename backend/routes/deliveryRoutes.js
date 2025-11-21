@@ -3,6 +3,7 @@ const router = express.Router();
 const verifyToken = require('../middleware/auth');
 const prisma = require('../config/prisma');
 const ensureVerified = require('../middleware/ensureVerified');
+const { haversineDistance } = require('../utils/geo');
 
 // Create delivery
 router.post('/', verifyToken, ensureVerified, async (req, res) => {
@@ -52,34 +53,67 @@ router.get('/mine', verifyToken, async (req, res) => {
 });
 
 
-// GET /api/deliveries/:id/match - find matching trips for a delivery
-router.get('/:id/match', verifyToken, async (req, res) => {
-  const deliveryId = req.params.id;
+// // GET /api/deliveries/:id/match - Find matching trips based on geolocation
+// router.get('/:id/match', verifyToken, async (req, res) => {
+//   const deliveryId = req.params.id;
+//   const MATCH_RADIUS_KM = 30;
 
-  try {
-    const delivery = await prisma.delivery.findUnique({
-      where: { id: deliveryId },
-    });
+//   try {
+//     const delivery = await prisma.delivery.findUnique({
+//       where: { id: deliveryId },
+//     });
 
-    if (!delivery) return res.status(404).json({ msg: "Delivery not found" });
+//     if (!delivery) return res.status(404).json({ msg: "Delivery not found" });
 
-    const trips = await prisma.trip.findMany({
-      where: {
-        start: delivery.pickup,
-        end: delivery.dropoff,
-        travelDate: {
-          gte: new Date(), // only future trips
-        },
-      },
-      orderBy: { travelDate: 'asc' },
-      include: { traveler: true },
-    });
+//     if (
+//       delivery.pickupLat == null || delivery.pickupLng == null ||
+//       delivery.dropoffLat == null || delivery.dropoffLng == null
+//     ) {
+//       return res.status(400).json({ msg: "Delivery is missing geolocation data." });
+//     }
 
-    res.json(trips);
-  } catch (err) {
-    res.status(500).json({ msg: 'Failed to find matches', error: err.message });
-  }
-});
+//     const allTrips = await prisma.trip.findMany({
+//       where: {
+//         departure: {
+//           gte: new Date(),
+//         },
+//       },
+//       include: {
+//         traveler: {
+//           select: { id: true, name: true, email: true, isVerified: true },
+//         },
+//       },
+//     });
+
+//     const matchingTrips = allTrips.filter(trip => {
+//       if (
+//         trip.startLat == null || trip.startLng == null ||
+//         trip.endLat == null || trip.endLng == null
+//       ) return false;
+
+//       const pickupDistance = haversineDistance(
+//         delivery.pickupLat, delivery.pickupLng,
+//         trip.startLat, trip.startLng
+//       );
+
+//       const dropoffDistance = haversineDistance(
+//         delivery.dropoffLat, delivery.dropoffLng,
+//         trip.endLat, trip.endLng
+//       );
+
+//       return pickupDistance <= MATCH_RADIUS_KM && dropoffDistance <= MATCH_RADIUS_KM;
+//     });
+
+//     res.json({
+//       matches: matchingTrips,
+//       count: matchingTrips.length,
+//     });
+
+//   } catch (err) {
+//     console.error("Error in delivery match:", err);
+//     res.status(500).json({ msg: "Failed to find matching trips", error: err.message });
+//   }
+// });
 
 router.patch('/:id/complete', verifyToken, ensureVerified, async (req, res) => {
   const { id } = req.params;

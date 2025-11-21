@@ -8,24 +8,33 @@ datasource db {
 }
 
 model User {
-  id               String                @id @default(uuid())
+  id               String   @id @default(uuid())
   name             String
-  email            String                @unique
+  email            String   @unique
   password         String
   role             String
-  createdAt        DateTime              @default(now())
-  deliveries       Delivery[]
-  trips            Trip[]
-  deliveryRequests DeliveryRequest[]     @relation("UserRequests")
-  isVerified       Boolean               @default(false)
-  verifications    VerificationRequest[]
+  createdAt        DateTime @default(now())
+
+  emailVerified    Boolean  @default(false)
+  emailToken       String?
+
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  isVerified       Boolean   @default(false)
   documentUrl      String?
 
-  givenRatings     Rating[]  @relation("GivenRatings")
-  receivedRatings  Rating[]  @relation("ReceivedRatings")
+  deliveries       Delivery[]
+  trips            Trip[]
+  deliveryRequests DeliveryRequest[] @relation("UserRequests")
+
+  verifications VerificationRequest[]
+  givenRatings   Rating[]  @relation("GivenRatings")
+  receivedRatings Rating[] @relation("ReceivedRatings")
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
 }
+
 
 model Delivery {
   id          String            @id @default(uuid())

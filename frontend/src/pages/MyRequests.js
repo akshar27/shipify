@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useContext } from "react";
 import API from "../services/api";
+import { ChatContext } from "../context/ChatContext";
 
 export default function MatchesForTraveler() {
   const [matches, setMatches] = useState([]);
+
+  // 👇 Access global chat context
+  const { setOpenChats } = useContext(ChatContext);
 
   useEffect(() => {
     const fetch = async () => {
@@ -17,86 +21,120 @@ export default function MatchesForTraveler() {
     fetch();
   }, []);
 
+  const updateStatus = (deliveryId, newStatus) => {
+    setMatches((prev) =>
+      prev.map((m) => {
+        if (m.delivery?.id === deliveryId) {
+          return {
+            ...m,
+            delivery: {
+              ...m.delivery,
+              status: newStatus,
+            },
+          };
+        }
+        return m;
+      })
+    );
+  };
+
   const handleAccept = async (deliveryId) => {
     try {
       await API.patch(`/deliveries/${deliveryId}/accept`);
-      setMatches((prev) =>
-        prev.map((d) =>
-          d.id === deliveryId ? { ...d, status: "accepted" } : d
-        )
-      );
+      updateStatus(deliveryId, "accepted");
     } catch (err) {
       console.error("Accept failed", err);
       alert("Failed to accept request");
     }
-  };  
+  };
 
   const handleComplete = async (deliveryId) => {
     try {
       await API.patch(`/deliveries/${deliveryId}/complete`);
-      setMatches((prev) =>
-        prev.map((d) =>
-          d.id === deliveryId ? { ...d, status: "delivered" } : d
-        )
-      );
+      updateStatus(deliveryId, "delivered");
     } catch (err) {
       console.error("Complete failed", err);
       alert("Failed to mark as delivered");
     }
   };
 
+  const handleMessageClick = (deliveryId, sender) => {
+    if (!sender?.id) {
+      alert("Sender ID not found. Cannot open chat.");
+      return;
+    }
+
+    // 💬 Open chat tab globally
+    setOpenChats((prev) => ({
+      ...prev,
+      [deliveryId]: {
+        receiverId: sender.id,
+        senderName: sender.name || "Sender",
+      },
+    }));
+  };
+
   return (
     <div className="container mt-4">
       <h2>Delivery Requests Matching Your Trips</h2>
+
       {matches.length === 0 ? (
         <p>No matching delivery requests.</p>
       ) : (
-        matches.map((d) => (
-          <div className="card my-3" key={d.id}>
-            <div className="card-body">
-              <h5>From: {d.sender.name} ({d.sender.email})</h5>
-              <p>
-                <strong>Pickup:</strong> {d.pickup}<br />
-                <strong>Dropoff:</strong> {d.dropoff}<br />
-                <strong>Item:</strong> {d.itemType} ({d.size})<br />
-                <strong>Weight:</strong> {d.weight} kg<br />
-                <strong>Status:</strong> {d.status}
-              </p>
+        matches
+          .filter((m) => m.delivery)
+          .map((m) => {
+            const d = m.delivery;
+            const sender = d.sender || {};
 
-              {/* Action Buttons */}
-              {d.status === "pending" && (
-                <button
-                  className="btn btn-primary"
-                  onClick={() => handleAccept(d.id)}
-                >
-                  Accept Delivery
-                </button>
-              )}
+            return (
+              <div className="card my-3" key={d.id}>
+                <div className="card-body">
+                  <h5>
+                    From: {sender.name || "Unknown"} ({sender.email || "N/A"})
+                  </h5>
+                  <p>
+                    <strong>Pickup:</strong> {d.pickup || "N/A"} <br />
+                    <strong>Dropoff:</strong> {d.dropoff || "N/A"} <br />
+                    <strong>Item:</strong> {d.itemType || "N/A"} ({d.size || "N/A"})<br />
+                    <strong>Weight:</strong> {d.weight || "N/A"} kg<br />
+                    <strong>Status:</strong> {d.status || "N/A"}
+                  </p>
 
-              {d.status === "accepted" && (
-                <>
-                  <button
-                    className="btn btn-warning"
-                    onClick={() => handleComplete(d.id)}
-                  >
-                    Mark as Delivered
-                  </button>
+                  {d.status === "pending" && (
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => handleAccept(d.id)}
+                    >
+                      Accept Delivery
+                    </button>
+                  )}
 
-                  <a
-                    href={`/chat/${d.id}`}
-                    className="btn btn-outline-success ms-2"
-                  >
-                    💬 Message Sender
-                  </a>
-                </>
-              )}
+                  {d.status === "accepted" && (
+                    <>
+                      <button
+                        className="btn btn-warning"
+                        onClick={() => handleComplete(d.id)}
+                      >
+                        Mark as Delivered
+                      </button>
 
-              {d.status === "delivered" && (
-                <span className="badge bg-success">Delivered</span>
-              )}
-            </div>
-          </div>
-        ))
+                      <button
+                        className="btn btn-outline-success ms-2"
+                        onClick={() => handleMessageClick(d.id, sender)}
+                      >
+                        💬 Message Sender
+                      </button>
+                    </>
+                  )}
+
+                  {d.status === "delivered" && (
+                    <span className="badge bg-success">Delivered</span>
+                  )}
+                </div>
+              </div>
+            );
+          })
       )}
     </div>
   );

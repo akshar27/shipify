@@ -1,0 +1,54 @@
+.floating-chat-button {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 50px;
+    height: 50px;
+    background-color: #007bff;
+    color: white;
+    font-size: 24px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    z-index: 9999;
+  }
+  
+  .chat-drawer {
+    position: fixed;
+    bottom: 80px;
+    right: 20px;
+    width: 350px;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 9999;
+  }
+  
+  .chat-tabs {
+    display: flex;
+    background: #f2f2f2;
+    border-bottom: 1px solid #ccc;
+  }
+  
+  .tab {
+    flex: 1;
+    padding: 8px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    border-right: 1px solid #ccc;
+  }
+  
+  .tab.active {
+    background: #007bff;
+    color: white;
+  }
+  
+  .chat-box {
+    padding: 10px;
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  
