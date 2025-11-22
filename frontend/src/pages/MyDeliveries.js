@@ -1,143 +1,77 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import API from "../services/api";
-import "../css/MyDeliveries.css";
+import RatingModal from "../components/RatingModal";
 
 export default function MyDeliveries() {
   const [deliveries, setDeliveries] = useState([]);
-  const [showModal, setShowModal] = useState(false);
-  const [currentDelivery, setCurrentDelivery] = useState(null);
-  const [stars, setStars] = useState(0);
-  const [comment, setComment] = useState("");
-  const [ratedIds, setRatedIds] = useState({});
+  const [showRating, setShowRating] = useState(false);
+  const [selectedDelivery, setSelectedDelivery] = useState(null);
+  const [ratedDeliveries, setRatedDeliveries] = useState({});
 
   useEffect(() => {
-    const fetchDeliveries = async () => {
+    const loadDeliveries = async () => {
       try {
         const res = await API.get("/deliveries/mine");
         setDeliveries(res.data);
+
+        // Check rating status for each delivery
+        for (let d of res.data) {
+          const r = await API.get(`/ratings/delivery/${d.id}`);
+          setRatedDeliveries((prev) => ({ ...prev, [d.id]: !!r.data }));
+        }
       } catch (err) {
         console.error("Failed to load deliveries", err);
       }
     };
-    fetchDeliveries();
+
+    loadDeliveries();
   }, []);
 
-  const handleRate = (delivery) => {
-    setCurrentDelivery(delivery);
-    setStars(0);
-    setComment("");
-    setShowModal(true);
+  const openRating = (d) => {
+    setSelectedDelivery(d);
+    setShowRating(true);
   };
 
-  const submitRating = async () => {
-    try {
-      const travelerId = currentDelivery?.requests?.[0]?.travelerId;
-      if (!travelerId || !stars) return;
-
-      await API.post("/ratings", {
-        deliveryId: currentDelivery.id,
-        receiverId: travelerId,
-        rating: stars,
-        comment,
-      });
-
-      setRatedIds((prev) => ({ ...prev, [currentDelivery.id]: true }));
-      setShowModal(false);
-    } catch (err) {
-      console.error("Failed to submit rating", err);
-    }
+  const markRated = (deliveryId) => {
+    setRatedDeliveries((prev) => ({ ...prev, [deliveryId]: true }));
   };
 
   return (
     <div className="container mt-5">
-      <h2 className="mb-4">My Delivery Requests</h2>
+      <h2>My Deliveries</h2>
 
-      {deliveries.length === 0 ? (
-        <p>No deliveries yet.</p>
-      ) : (
-        <div className="row">
-          {deliveries.map((d) => (
-            <div className="col-md-6 mb-4" key={d.id}>
-              <div className="card shadow">
-                <div className="card-body">
-                  <h5 className="card-title">{d.itemType} ({d.size})</h5>
-                  <p className="card-text">
-                    <strong>From:</strong> {d.pickup}<br />
-                    <strong>To:</strong> {d.dropoff}<br />
-                    <strong>Weight:</strong> {d.weight} kg<br />
-                    <strong>Status:</strong> {d.status}
-                  </p>
+      {deliveries.map((d) => (
+        <div className="card p-3 mb-3" key={d.id}>
+          <h5>{d.itemType} ({d.size})</h5>
+          <p>
+            <strong>Pickup:</strong> {d.pickup} <br />
+            <strong>Dropoff:</strong> {d.dropoff} <br />
+            <strong>Status:</strong> {d.status}
+          </p>
 
-                  <Link to={`/match/${d.id}`} className="btn btn-sm btn-outline-primary mb-2">
-                    Find Traveler
-                  </Link>
+          {d.status === "delivered" &&
+            d.requests?.length > 0 &&
+            !ratedDeliveries[d.id] && (
+              <button className="btn btn-success" onClick={() => openRating(d)}>
+                Rate Traveler
+              </button>
+          )}
 
-                  {d.status === "accepted" && d.requests?.length > 0 && (
-                    <Link to={`/chat/${d.id}`} className="btn btn-sm btn-outline-success mt-2">
-                      💬 Message Traveler
-                    </Link>
-                  )}
-
-                  {d.status === "delivered" && !ratedIds[d.id] && d.requests?.length > 0 && (
-                    <button
-                      className="btn btn-sm btn-success ms-2"
-                      onClick={() => handleRate(d)}
-                    >
-                      Rate Traveler
-                    </button>
-                  )}
-
-                  {ratedIds[d.id] && (
-                    <p className="text-success mt-2">Thanks for your rating!</p>
-                  )}
-
-                  <br />
-                  <small className="text-muted">
-                    Created: {new Date(d.createdAt).toLocaleString()}
-                  </small>
-                </div>
-              </div>
-            </div>
-          ))}
+          {ratedDeliveries[d.id] && (
+            <p className="text-success">Thanks for your rating!</p>
+          )}
         </div>
-      )}
+      ))}
 
-      {/* ⭐ Rating Modal */}
-      {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-box">
-            <h5>Rate Your Traveler</h5>
-            <div className="star-row mb-2">
-              {[1, 2, 3, 4, 5].map((s) => (
-                <span
-                  key={s}
-                  style={{
-                    fontSize: "24px",
-                    color: s <= stars ? "gold" : "#ccc",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => setStars(s)}
-                >
-                  ★
-                </span>
-              ))}
-            </div>
-            <textarea
-              className="form-control mb-3"
-              rows={3}
-              placeholder="Optional comment"
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-            />
-            <button className="btn btn-primary me-2" onClick={submitRating}>
-              Submit
-            </button>
-            <button className="btn btn-secondary" onClick={() => setShowModal(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
+      {showRating && (
+        <RatingModal
+          show={showRating}
+          delivery={selectedDelivery}
+          receiverId={selectedDelivery.requests[0].travelerId}
+          onRated={markRated}
+          onClose={() => setShowRating(false)}
+        />
       )}
     </div>
   );

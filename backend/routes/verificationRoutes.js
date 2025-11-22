@@ -1,20 +1,14 @@
 const express = require('express');
-const multer = require('multer');
 const prisma = require('../config/prisma');
 const verifyToken = require('../middleware/auth');
+const upload = require('../config/multer'); // <-- unified memoryStorage
+const { uploadToS3 } = require("../utils/s3Upload");
 
 const router = express.Router();
 
-// Multer config (save in /uploads folder)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) =>
-    cb(null, `${Date.now()}-${file.originalname}`)
-});
-
-const upload = multer({ storage });
-
-// Upload ID document
+/* ==========================================
+   📌 Submit Verification Document (S3)
+========================================== */
 router.post('/', verifyToken, upload.single('document'), async (req, res) => {
   try {
     const { fullName } = req.body;
@@ -23,8 +17,10 @@ router.post('/', verifyToken, upload.single('document'), async (req, res) => {
       return res.status(400).json({ msg: 'Document is required' });
     }
 
-    const documentUrl = `/uploads/${req.file.filename}`;
+    // Upload to S3 → folder = "documents"
+    const s3Url = await uploadToS3(req.file, "documents");
 
+    // Check pending requests
     const existing = await prisma.verificationRequest.findFirst({
       where: {
         userId: req.user.id,
@@ -36,17 +32,35 @@ router.post('/', verifyToken, upload.single('document'), async (req, res) => {
       return res.status(400).json({ msg: 'Verification already pending' });
     }
 
+    // Create verification request
     const request = await prisma.verificationRequest.create({
       data: {
         userId: req.user.id,
         fullName,
-        documentUrl,
+        documentUrl: s3Url,
       },
     });
 
-    res.status(201).json({ msg: 'Verification submitted', request });
+    // Update user table also
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        documentUrl: s3Url,
+        isVerified: false, // waiting for admin
+      },
+    });
+
+    res.status(201).json({
+      msg: 'Verification submitted successfully',
+      documentUrl: s3Url,
+      request,
+    });
+
   } catch (err) {
-    res.status(500).json({ msg: 'Error uploading document', error: err.message });
+    res.status(500).json({
+      msg: 'Error uploading document',
+      error: err.message,
+    });
   }
 });
 

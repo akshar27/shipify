@@ -8,69 +8,69 @@ datasource db {
 }
 
 model User {
-  id               String   @id @default(uuid())
-  name             String
-  email            String   @unique
-  password         String
-  role             String
-  createdAt        DateTime @default(now())
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String
+  createdAt DateTime @default(now())
 
-  emailVerified    Boolean  @default(false)
-  emailToken       String?
-
-  resetToken       String?
-  resetTokenExpiry DateTime?
-
-  isVerified       Boolean   @default(false)
-  documentUrl      String?
+  profilePicture String?
+  bio            String?
+  phone          String?
 
   deliveries       Delivery[]
   trips            Trip[]
   deliveryRequests DeliveryRequest[] @relation("UserRequests")
 
-  verifications VerificationRequest[]
-  givenRatings   Rating[]  @relation("GivenRatings")
+  isVerified       Boolean   @default(false)
+  documentUrl      String?
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  givenRatings    Rating[] @relation("GivenRatings")
   receivedRatings Rating[] @relation("ReceivedRatings")
+
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
-}
 
+  // ✅ FIX: Add reverse relation so schema is valid
+  verificationRequests VerificationRequest[]
+}
 
 model Delivery {
-  id          String            @id @default(uuid())
-  senderId    String
-  sender      User              @relation(fields: [senderId], references: [id])
-  pickup      String
-  dropoff     String
-  pickupLat   Float?            // ← new
-  pickupLng   Float?            // ← new
-  dropoffLat  Float?            // ← new
-  dropoffLng  Float?            // ← new
-  itemType    String
-  size        String
-  weight      Float
-  status      String            @default("pending")
-  createdAt   DateTime          @default(now())
-  requests    DeliveryRequest[] @relation("DeliveryRequests")
-  ratings     Rating[]
-  messages    Message[]
+  id         String            @id @default(uuid())
+  senderId   String
+  sender     User              @relation(fields: [senderId], references: [id])
+  pickup     String
+  dropoff    String
+  pickupLat  Float?
+  pickupLng  Float?
+  dropoffLat Float?
+  dropoffLng Float?
+  itemType   String
+  size       String
+  weight     Float
+  status     String            @default("pending")
+  createdAt  DateTime          @default(now())
+  requests   DeliveryRequest[] @relation("DeliveryRequests")
+  ratings    Rating[]
+  messages   Message[]
 }
-
 
 model Trip {
   id         String   @id @default(uuid())
   travelerId String
   traveler   User     @relation(fields: [travelerId], references: [id])
   start      String
-  startLat   Float?   // ← new
-  startLng   Float?   // ← new
+  startLat   Float?
+  startLng   Float?
   end        String
-  endLat     Float?   // ← new
-  endLng     Float?   // ← new
+  endLat     Float?
+  endLng     Float?
   departure  DateTime
   createdAt  DateTime @default(now())
 }
-
 
 model DeliveryRequest {
   id         String   @id @default(uuid())

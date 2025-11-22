@@ -1,77 +1,161 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const verifyToken = require('../middleware/auth');
 const prisma = require('../config/prisma');
-const path = require('path');
+const { uploadToS3 } = require("../utils/s3Upload");
+const upload = require("../config/multer");
 
-// ✅ Use diskStorage to preserve file extensions
-const storage = multer.diskStorage({
-  destination: 'uploads/',
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname); // Get original file extension
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, uniqueName);
-  },
-});
-
-const upload = multer({ storage });
-
-// ✅ POST /api/users/upload-doc
+/* ============================
+   📌 Upload Verification Document (S3/documents/)
+============================ */
 router.post('/upload-doc', verifyToken, upload.single('document'), async (req, res) => {
   try {
-    const documentUrl = `/uploads/${req.file.filename}`; // will now have correct extension
+    if (!req.file) return res.status(400).json({ msg: "No file uploaded" });
+
+    const s3Url = await uploadToS3(req.file, "documents");
 
     await prisma.user.update({
       where: { id: req.user.id },
       data: {
-        documentUrl,
-        isVerified: false, // Mark as unverified
+        documentUrl: s3Url,
+        isVerified: false, // mark as pending
       },
     });
 
-    res.json({ msg: 'Document uploaded. Pending admin verification.' });
+    res.json({ msg: 'Document uploaded to S3. Pending admin verification.', documentUrl: s3Url });
   } catch (err) {
     res.status(500).json({ msg: 'Upload failed', error: err.message });
   }
 });
 
+/* ============================
+   📌 Upload Profile Photo (S3/profile/)
+============================ */
+router.post("/upload-photo", verifyToken, upload.single("photo"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ msg: "No file uploaded" });
+
+    const photoUrl = await uploadToS3(req.file, "profile");
+
+    const updated = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { profilePicture: photoUrl },
+    });
+
+    res.json({ msg: "Profile photo updated", photoUrl: updated.profilePicture });
+  } catch (err) {
+    res.status(500).json({ msg: "Upload failed", error: err.message });
+  }
+});
+
+/* ============================
+   📌 Get Profile
+============================ */
 router.get('/profile', verifyToken, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       include: {
-        receivedRatings: true,
+        receivedRatings: {
+          include: {
+            rater: { select: { name: true } }
+          },
+          orderBy: { createdAt: "desc" }
+        },
       },
     });
 
-    const ratings = user.receivedRatings.map(r => r.rating);
-    const avgRating = ratings.length > 0 ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1) : null;
+    const avgRating = user.receivedRatings.length
+      ? (user.receivedRatings.reduce((sum, r) => sum + r.rating, 0) /
+          user.receivedRatings.length).toFixed(1)
+      : null;
 
-    res.json({
-      name: user.name,
-      email: user.email,
-      documentUrl: user.documentUrl,
-      isVerified: user.isVerified,
-      avgRating,
-    });
+      res.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        bio: user.bio,
+        phone: user.phone,
+        profilePicture: user.profilePicture,
+        documentUrl: user.documentUrl,
+        isVerified: user.isVerified,
+        avgRating,
+        totalRatings: user.receivedRatings.length,
+        reviews: user.receivedRatings
+      });
+
   } catch (err) {
     res.status(500).json({ msg: "Failed to fetch profile", error: err.message });
   }
 });
 
+/* ============================
+   📌 Update Name
+============================ */
 router.patch('/update-profile', verifyToken, async (req, res) => {
-  const { name } = req.body;
+  const { name, bio, phone } = req.body;
 
   try {
     const updated = await prisma.user.update({
       where: { id: req.user.id },
-      data: { name },
+      data: {
+        name,
+        bio,
+        phone,
+      },
     });
 
     res.json({ msg: 'Profile updated', user: updated });
   } catch (err) {
     res.status(500).json({ msg: 'Update failed', error: err.message });
+  }
+});
+
+// GET Public Profile (view another user)
+router.get("/public/:id", async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      include: {
+        receivedRatings: {
+          include: { rater: { select: { name: true, id: true } } },
+          orderBy: { createdAt: "desc" },
+        },
+        deliveries: true,
+        trips: true,
+      },
+    });
+
+    if (!user) return res.status(404).json({ msg: "User not found" });
+
+    const avgRating = user.receivedRatings.length
+      ? (
+          user.receivedRatings.reduce((sum, r) => sum + r.rating, 0) /
+          user.receivedRatings.length
+        ).toFixed(1)
+      : null;
+
+    // Mask phone number for privacy
+    const maskedPhone = user.phone
+      ? user.phone.replace(/.(?=.{4})/g, "*")
+      : null;
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      profilePicture: user.profilePicture,
+      bio: user.bio,
+      phone: maskedPhone,
+      isVerified: user.isVerified,
+      avgRating,
+      totalRatings: user.receivedRatings.length,
+      reviews: user.receivedRatings,
+      completedDeliveries: user.deliveries.filter((d) => d.status === "delivered").length,
+      completedTrips: user.trips.length,
+      memberSince: user.createdAt,
+    });
+  } catch (err) {
+    res.status(500).json({ msg: "Failed to fetch public profile", error: err.message });
   }
 });
 

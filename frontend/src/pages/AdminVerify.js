@@ -40,49 +40,63 @@ export default function AdminVerify() {
     }
   };
 
-  if (!user) return <p className="mt-5">Loading...</p>;
+  if (!user) return <p className="mt-5 text-center">Loading...</p>;
 
-  const fullDocUrl = `http://localhost:5050${user.documentUrl}`; // or use env variable
+  const fullDocUrl = user.documentUrl; // S3 URL now
 
   return (
     <div className="container mt-5">
-      <h3>User Details</h3>
-      <p><strong>Name:</strong> {user.name}</p>
-      <p><strong>Email:</strong> {user.email}</p>
+      <h3 className="mb-4">Verify User Document</h3>
 
-      {user.documentUrl && (
-        <div className="mt-4">
-          <strong>Document Preview:</strong><br />
+      <button className="btn btn-secondary mb-3" onClick={() => navigate("/admin")}>
+        ← Back to All Users
+      </button>
 
-          {/* Show inline preview based on file type */}
-          {user.documentUrl.endsWith(".pdf") ? (
-            <iframe
-              src={fullDocUrl}
-              title="Document Preview"
-              width="100%"
-              height="500px"
-              style={{ border: "1px solid #ccc" }}
-            />
-          ) : (
-            <img
-              src={fullDocUrl}
-              alt="Uploaded Document"
-              className="img-fluid mt-2"
-              style={{ maxHeight: "400px", border: "1px solid #ccc" }}
-            />
-          )}
+      <div className="card shadow p-4">
+        <h5><strong>Name:</strong> {user.name}</h5>
+        <p><strong>Email:</strong> {user.email}</p>
 
-          <div className="mt-2">
-            <a href={fullDocUrl} target="_blank" rel="noopener noreferrer">
-              Open in New Tab
-            </a>
+        {user.documentUrl ? (
+          <div className="mt-4">
+            <h6><strong>Document Preview:</strong></h6>
+
+            {/* PDF */}
+            {user.documentUrl.toLowerCase().endsWith(".pdf") ? (
+              <iframe
+                src={fullDocUrl}
+                title="Document Preview"
+                width="100%"
+                height="500"
+                style={{ border: "1px solid #ccc" }}
+              />
+            ) : (
+              // Image preview
+              <img
+                src={fullDocUrl}
+                alt="Uploaded Document"
+                className="img-fluid mt-2"
+                style={{ maxHeight: "500px", border: "1px solid #ccc" }}
+              />
+            )}
+
+            <div className="mt-2">
+              <a href={fullDocUrl} target="_blank" rel="noopener noreferrer">
+                Open in New Tab
+              </a>
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-danger mt-4">❌ No document uploaded by this user.</p>
+        )}
 
-      <div className="mt-4">
-        <button className="btn btn-success me-3" onClick={handleApprove}>Approve</button>
-        <button className="btn btn-danger" onClick={handleReject}>Reject</button>
+        <div className="mt-4">
+          <button className="btn btn-success me-3" onClick={handleApprove}>
+            Approve
+          </button>
+          <button className="btn btn-danger" onClick={handleReject}>
+            Reject
+          </button>
+        </div>
       </div>
     </div>
   );

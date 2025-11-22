@@ -3,46 +3,79 @@ import API from "../services/api";
 
 export default function ProfilePage() {
   const [profile, setProfile] = useState(null);
-  const [newName, setNewName] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
-  const [file, setFile] = useState(null);
+
+  const [editMode, setEditMode] = useState(false);
+  const [name, setName] = useState("");
+  const [bio, setBio] = useState("");
+  const [phone, setPhone] = useState("");
+
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    const fetchProfile = async () => {
-      try {
-        const res = await API.get("/users/profile");
-        setProfile(res.data);
-        setNewName(res.data.name);
-      } catch (err) {
-        console.error("Failed to load profile", err);
-      }
-    };
-    fetchProfile();
+    loadProfile();
   }, []);
 
-  const handleNameUpdate = async () => {
+  const loadProfile = async () => {
+    const res = await API.get("/users/profile");
+    setProfile(res.data);
+
+    setName(res.data.name);
+    setBio(res.data.bio || "");
+    setPhone(res.data.phone || "");
+  };
+
+  /* ================================
+     📸 Handle Profile Photo Upload
+  ================================ */
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setPhotoPreview(URL.createObjectURL(file));
+    uploadPhoto(file);
+  };
+
+  const uploadPhoto = async (file) => {
     try {
-      await API.patch("/users/update-profile", { name: newName });
-      setProfile({ ...profile, name: newName });
-      setIsEditing(false);
-      setMessage("Name updated successfully");
+      setUploading(true);
+
+      const formData = new FormData();
+      formData.append("photo", file);
+
+      const res = await API.post("/users/upload-photo", formData);
+
+      setMessage("Profile photo updated!");
+      setProfile({ ...profile, profilePicture: res.data.photoUrl });
+
+      setTimeout(() => setMessage(""), 2000);
     } catch (err) {
-      console.error("Update failed", err);
+      console.error("Photo upload failed", err);
+      alert("Upload failed");
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handleFileUpload = async (e) => {
-    e.preventDefault();
-    if (!file) return;
-    const formData = new FormData();
-    formData.append("document", file);
-
+  /* ================================
+     📌 Save Name + Bio + Phone
+  ================================ */
+  const saveChanges = async () => {
     try {
-      const res = await API.post("/users/upload-doc", formData);
-      setMessage(res.data.msg);
+      await API.patch("/users/update-profile", {
+        name,
+        bio,
+        phone,
+      });
+
+      setMessage("Profile updated!");
+      setEditMode(false);
+      loadProfile();
+
+      setTimeout(() => setMessage(""), 2000);
     } catch (err) {
-      console.error("Upload failed", err);
+      console.error(err);
     }
   };
 
@@ -50,75 +83,136 @@ export default function ProfilePage() {
 
   return (
     <div className="container mt-5">
-      <h2>Profile</h2>
 
-      {message && <div className="alert alert-info">{message}</div>}
+      <h2>Your Profile</h2>
 
-      <div className="card mb-3 p-3">
-        <div>
-          <strong>Email:</strong> {profile.email}
+      {message && <div className="alert alert-success">{message}</div>}
+
+      <div className="card p-4 mb-4">
+        
+        {/* Profile Photo */}
+        <div className="text-center">
+          <img
+            src={photoPreview || profile.profilePicture || "https://via.placeholder.com/150"}
+            alt="Profile"
+            className="rounded-circle mb-3"
+            style={{ width: 140, height: 140, objectFit: "cover" }}
+          />
+
+          <label className="btn btn-outline-primary btn-sm mt-2">
+            Change Photo
+            <input
+              type="file"
+              hidden
+              accept="image/*"
+              onChange={handlePhotoSelect}
+            />
+          </label>
+
+          {uploading && <p className="text-muted mt-2">Uploading...</p>}
         </div>
 
-        <div className="mt-2">
-          <strong>Name:</strong>{" "}
-          {isEditing ? (
-            <>
-              <input
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="form-control d-inline w-50 me-2"
-              />
-              <button className="btn btn-success btn-sm" onClick={handleNameUpdate}>
-                Save
-              </button>
-              <button
-                className="btn btn-secondary btn-sm ms-2"
-                onClick={() => setIsEditing(false)}
-              >
-                Cancel
-              </button>
-            </>
+        {/* Editable Fields */}
+        <div className="mt-4">
+          <label className="fw-bold">Name</label>
+          <input
+            className="form-control mb-3"
+            value={name}
+            disabled={!editMode}
+            onChange={(e) => setName(e.target.value)}
+          />
+
+          <label className="fw-bold">Phone</label>
+          <input
+            className="form-control mb-3"
+            value={phone}
+            disabled={!editMode}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="Enter phone number"
+          />
+
+          <label className="fw-bold">Bio</label>
+          <textarea
+            className="form-control mb-3"
+            value={bio}
+            disabled={!editMode}
+            rows="3"
+            onChange={(e) => setBio(e.target.value)}
+            placeholder="Write something about yourself..."
+          ></textarea>
+
+          {!editMode ? (
+            <button className="btn btn-primary" onClick={() => setEditMode(true)}>
+              Edit Profile
+            </button>
           ) : (
             <>
-              {profile.name}
-              <button
-                className="btn btn-link btn-sm"
-                onClick={() => setIsEditing(true)}
-              >
-                Edit
+              <button className="btn btn-success me-2" onClick={saveChanges}>
+                Save Changes
+              </button>
+              <button className="btn btn-secondary" onClick={() => setEditMode(false)}>
+                Cancel
               </button>
             </>
           )}
         </div>
 
-        <div className="mt-2">
-          <strong>Verified:</strong> {profile.isVerified ? "✅" : "❌"}
+        {/* 🔗 PUBLIC PROFILE LINK + COPY BUTTON */}
+        <div className="mt-4">
+          <strong>Public Profile Link:</strong>
+
+          <div className="input-group mt-1">
+            <input
+              className="form-control"
+              value={`${window.location.origin}/public-profile/${profile.id}`}
+              readOnly
+              id="publicProfileLink"
+            />
+
+            <button
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                navigator.clipboard.writeText(
+                  `${window.location.origin}/public-profile/${profile.id}`
+                );
+                setMessage("Copied to clipboard!");
+                setTimeout(() => setMessage(""), 1500);
+              }}
+            >
+              📋 Copy
+            </button>
+          </div>
         </div>
 
-        {profile.documentUrl && (
-          <div className="mt-2">
-            <strong>Document:</strong> <a href={profile.documentUrl} target="_blank" rel="noreferrer">View</a>
-          </div>
-        )}
 
-        {!profile.isVerified && (
-          <form className="mt-3" onSubmit={handleFileUpload}>
-            <input
-              type="file"
-              onChange={(e) => setFile(e.target.files[0])}
-              accept=".pdf,.jpg,.png"
-              className="form-control mb-2"
-            />
-            <button className="btn btn-outline-primary btn-sm" type="submit">
-              Upload Document for Verification
-            </button>
-          </form>
-        )}
+        {/* Verified Badge */}
+        <p className="mt-3">
+          <strong>Verified:</strong> {profile.isVerified ? "✅ Verified" : "❌ Not Verified"}
+        </p>
 
+        {/* Average Rating */}
         {profile.avgRating && (
-          <div className="mt-3">
-            <strong>Avg Rating:</strong> {profile.avgRating} ⭐
-          </div>
+          <>
+            <h4 className="mt-3">⭐ {profile.avgRating} / 5</h4>
+            <p className="text-muted">{profile.totalRatings} reviews</p>
+          </>
+        )}
+      </div>
+
+      {/* REVIEWS SECTION */}
+      <div className="card p-4">
+        <h4>Reviews</h4>
+
+        {profile.reviews.length === 0 ? (
+          <p>No reviews yet.</p>
+        ) : (
+          profile.reviews.map((r) => (
+            <div key={r.id} className="border-bottom py-2">
+              <strong>{r.rater.name} — ⭐ {r.rating}</strong>
+              <p>{r.comment}</p>
+              <small>{new Date(r.createdAt).toLocaleDateString()}</small>
+            </div>
+          ))
         )}
       </div>
     </div>

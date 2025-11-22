@@ -22,6 +22,7 @@ import ResetPassword from "./pages/ResetPassword";
 import { ChatProvider } from "./context/ChatContext";
 import FloatingChatDrawer from "./components/FloatingChatDrawer";
 import ResendVerification from "./pages/ResendVerification";
+import PublicProfile from "./pages/PublicProfile";
 
 function App() {
   const token = localStorage.getItem("token");
@@ -48,6 +49,7 @@ function App() {
           <Route path="/admin" element={<Admin user={user} />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/public-profile/:id" element={<PublicProfile />} />
 
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/resend-verification" element={<ResendVerification />} />
