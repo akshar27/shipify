@@ -194,7 +194,6 @@ exports.resendVerification = async (req, res) => {
       return res.status(400).json({ msg: "Email is already verified." });
     }
 
-    // Generate new token
     const newToken = crypto.randomBytes(32).toString("hex");
 
     await prisma.user.update({
@@ -202,13 +201,12 @@ exports.resendVerification = async (req, res) => {
       data: { emailToken: newToken }
     });
 
-    // Send email
     const transporter = nodemailer.createTransport({
-      service: 'Gmail',
+      service: "Gmail",
       auth: {
         user: process.env.SMTP_EMAIL,
         pass: process.env.SMTP_PASS,
-      }
+      },
     });
 
     const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${newToken}`;
@@ -223,10 +221,11 @@ exports.resendVerification = async (req, res) => {
     res.json({ msg: "Verification email resent successfully!" });
 
   } catch (err) {
-    console.log(err);
+    console.log("Resend Error:", err);
     res.status(500).json({ msg: "Something went wrong", error: err.message });
   }
 };
+
 
 exports.googleLogin = async (req, res) => {
   const { idToken } = req.body;

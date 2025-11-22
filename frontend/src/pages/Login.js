@@ -27,9 +27,18 @@ export default function Login() {
       const res = await API.post("/auth/login", form);
 
       const { token, user } = res.data;
+
+      // 🚨 BLOCK login if email is not verified
+      if (!user.emailVerified) {
+        setErrorMsg("Please verify your email first.");
+        return;
+      }
+
+      // Save session
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
+      // Redirect based on role
       if (user.role === "admin") navigate("/admin");
       else navigate("/dashboard");
 
@@ -47,6 +56,7 @@ export default function Login() {
       const res = await API.post("/auth/google-login", { idToken });
       const { token, user } = res.data;
 
+      // Google users are considered verified by Google
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
@@ -66,7 +76,7 @@ export default function Login() {
 
           <FormError message={errorMsg} />
 
-          {/* Resend verification link */}
+          {/* 🔁 Show resend verification link */}
           {errorMsg === "Please verify your email first." && (
             <div className="text-center mt-2 mb-2">
               <button
@@ -79,7 +89,6 @@ export default function Login() {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Email */}
             <div className="mb-3">
               <input
                 className="form-control"
@@ -91,7 +100,6 @@ export default function Login() {
               />
             </div>
 
-            {/* Password */}
             <div className="mb-3 position-relative">
               <input
                 className="form-control"
@@ -116,30 +124,19 @@ export default function Login() {
               </span>
             </div>
 
-            {/* 🔥 Improved Forgot Password UI */}
+            {/* Forgot Password */}
             <div className="text-end mb-3">
               <button
                 type="button"
                 onClick={() => navigate("/forgot-password")}
                 className="btn btn-link p-0 text-decoration-none"
-                style={{
-                  fontSize: "0.9rem",
-                  color: "#0d6efd",
-                  transition: "0.2s ease",
-                }}
-                onMouseEnter={(e) => (e.target.style.color = "#0a58ca")}
-                onMouseLeave={(e) => (e.target.style.color = "#0d6efd")}
               >
                 Forgot your password?
               </button>
             </div>
 
             {/* Login Button */}
-            <button
-              type="submit"
-              className="btn btn-success w-100"
-              disabled={loading}
-            >
+            <button type="submit" className="btn btn-success w-100" disabled={loading}>
               {loading ? (
                 <span className="spinner-border spinner-border-sm"></span>
               ) : (

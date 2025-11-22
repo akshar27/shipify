@@ -1,7 +1,7 @@
 import { useState } from "react";
 import API from "../services/api";
 import { useNavigate } from "react-router-dom";
-import { FaEye, FaEyeSlash, FaGoogle } from "react-icons/fa";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 import FormError from "../components/FormError";
 import { GoogleLogin } from "@react-oauth/google";
 
@@ -48,7 +48,7 @@ export default function Signup() {
         role: "user",
       });
 
-      alert("Account created! Please check your email to verify.");
+      alert("Account created! Please check your email to verify your account.");
       navigate("/login");
 
     } catch (err) {
@@ -58,7 +58,6 @@ export default function Signup() {
     }
   };
 
-  // GOOGLE SIGNUP HANDLER
   const handleGoogleSignup = async (credentialResponse) => {
     try {
       const idToken = credentialResponse.credential;
@@ -87,7 +86,7 @@ export default function Signup() {
           <FormError message={errorMsg} />
 
           <form onSubmit={handleSubmit}>
-            {/* Name */}
+            
             <div className="mb-3">
               <input
                 className="form-control"
@@ -98,7 +97,6 @@ export default function Signup() {
               />
             </div>
 
-            {/* Email */}
             <div className="mb-3">
               <input
                 className="form-control"
@@ -110,7 +108,6 @@ export default function Signup() {
               />
             </div>
 
-            {/* Password */}
             <div className="mb-3 position-relative">
               <input
                 className="form-control"
@@ -134,7 +131,6 @@ export default function Signup() {
               </span>
             </div>
 
-            {/* Confirm Password */}
             <div className="mb-3 position-relative">
               <input
                 className="form-control"
@@ -158,12 +154,7 @@ export default function Signup() {
               </span>
             </div>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              className="btn btn-primary w-100"
-              disabled={loading}
-            >
+            <button type="submit" className="btn btn-primary w-100" disabled={loading}>
               {loading ? (
                 <span className="spinner-border spinner-border-sm"></span>
               ) : (
@@ -171,7 +162,6 @@ export default function Signup() {
               )}
             </button>
 
-            {/* Google Signup */}
             <div className="mt-3 text-center">
               <GoogleLogin
                 onSuccess={handleGoogleSignup}

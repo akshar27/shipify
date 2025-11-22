@@ -79,6 +79,7 @@ router.get('/profile', verifyToken, async (req, res) => {
         profilePicture: user.profilePicture,
         documentUrl: user.documentUrl,
         isVerified: user.isVerified,
+        emailVerified: user.emailVerified,
         avgRating,
         totalRatings: user.receivedRatings.length,
         reviews: user.receivedRatings

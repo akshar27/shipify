@@ -28,15 +28,19 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
+  // ⭐ REQUIRED FOR EMAIL VERIFICATION  
+  emailToken      String?  
+  emailVerified   Boolean   @default(false)
+
   givenRatings    Rating[] @relation("GivenRatings")
   receivedRatings Rating[] @relation("ReceivedRatings")
 
   sentMessages     Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
 
-  // ✅ FIX: Add reverse relation so schema is valid
   verificationRequests VerificationRequest[]
 }
+
 
 model Delivery {
   id         String            @id @default(uuid())

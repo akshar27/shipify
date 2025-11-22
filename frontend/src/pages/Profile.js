@@ -190,6 +190,8 @@ export default function ProfilePage() {
           <strong>Verified:</strong> {profile.isVerified ? "✅ Verified" : "❌ Not Verified"}
         </p>
 
+        <p><strong>Email Verified:</strong> {profile.emailVerified ? "✅ Verified" : "❌ Not Verified"}</p>
+
         {/* Average Rating */}
         {profile.avgRating && (
           <>
