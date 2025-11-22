@@ -1,10 +1,9 @@
 import { useState } from "react";
 import API from "../services/api";
 import { useNavigate } from "react-router-dom";
-import { FaEye, FaEyeSlash, FaGoogle } from "react-icons/fa";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 import FormError from "../components/FormError";
 import { GoogleLogin } from "@react-oauth/google";
-import jwt_decode from "jwt-decode";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });
@@ -117,15 +116,21 @@ export default function Login() {
               </span>
             </div>
 
-            {/* Forgot Password */}
-            <div className="mb-3 text-end">
+            {/* 🔥 Improved Forgot Password UI */}
+            <div className="text-end mb-3">
               <button
                 type="button"
-                className="btn btn-link p-0"
                 onClick={() => navigate("/forgot-password")}
-                style={{ fontSize: "0.9rem" }}
+                className="btn btn-link p-0 text-decoration-none"
+                style={{
+                  fontSize: "0.9rem",
+                  color: "#0d6efd",
+                  transition: "0.2s ease",
+                }}
+                onMouseEnter={(e) => (e.target.style.color = "#0a58ca")}
+                onMouseLeave={(e) => (e.target.style.color = "#0d6efd")}
               >
-                Forgot Password?
+                Forgot your password?
               </button>
             </div>
 
