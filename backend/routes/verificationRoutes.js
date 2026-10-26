@@ -2,7 +2,7 @@ const express = require('express');
 const prisma = require('../config/prisma');
 const verifyToken = require('../middleware/auth');
 const upload = require('../config/multer'); // <-- unified memoryStorage
-const { uploadToS3 } = require("../utils/s3Upload");
+const { storeDocument } = require("../utils/documents");
 
 const router = express.Router();
 
@@ -18,8 +18,6 @@ router.post('/', verifyToken, upload.single('document'), async (req, res) => {
     }
 
     // Upload to S3 → folder = "documents"
-    const s3Url = await uploadToS3(req.file, "documents");
-
     // Check pending requests
     const existing = await prisma.verificationRequest.findFirst({
       where: {
@@ -32,12 +30,14 @@ router.post('/', verifyToken, upload.single('document'), async (req, res) => {
       return res.status(400).json({ msg: 'Verification already pending' });
     }
 
+    const docRef = await storeDocument(req.file);
+
     // Create verification request
     const request = await prisma.verificationRequest.create({
       data: {
         userId: req.user.id,
         fullName,
-        documentUrl: s3Url,
+        documentUrl: docRef,
       },
     });
 
@@ -45,21 +45,20 @@ router.post('/', verifyToken, upload.single('document'), async (req, res) => {
     await prisma.user.update({
       where: { id: req.user.id },
       data: {
-        documentUrl: s3Url,
+        documentUrl: docRef,
         isVerified: false, // waiting for admin
       },
     });
 
+    // The document reference stays server-side; only admins can turn it into a (short-lived) URL.
     res.status(201).json({
       msg: 'Verification submitted successfully',
-      documentUrl: s3Url,
-      request,
+      request: { id: request.id, status: request.status, createdAt: request.createdAt },
     });
 
   } catch (err) {
-    res.status(500).json({
-      msg: 'Error uploading document',
-      error: err.message,
+    res.status(err.status || 500).json({
+      msg: err.status ? err.message : 'Error uploading document',
     });
   }
 });

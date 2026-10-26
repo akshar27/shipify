@@ -1,7 +1,15 @@
 const express = require('express');
 const prisma = require('../config/prisma');
 const verifyToken = require('../middleware/auth');
+const { resolveDocumentUrl } = require('../utils/documents');
 const router = express.Router();
+
+// Documents are private: hand the admin a short-lived URL instead of the stored reference.
+const withDocUrl = (req, u) => ({
+  ...u,
+  documentType: u.documentUrl && /\.pdf$/i.test(u.documentUrl) ? 'pdf' : 'image',
+  documentUrl: resolveDocumentUrl(u.documentUrl, `${req.protocol}://${req.get('host')}`),
+});
 
 // GET single user by ID
 router.get('/user/:id', verifyToken, async (req, res) => {
@@ -13,7 +21,7 @@ router.get('/user/:id', verifyToken, async (req, res) => {
   });
 
   if (!user) return res.status(404).json({ msg: "User not found" });
-  res.json(user);
+  res.json(withDocUrl(req, user));
 });
 
 // GET verified users
@@ -58,7 +66,7 @@ router.get('/unverified-users', verifyToken, async (req, res) => {
       },
     });
 
-    res.json(users);
+    res.json(users.map((u) => withDocUrl(req, u)));
   } catch (err) {
     res.status(500).json({ msg: 'Failed to fetch users', error: err.message });
   }
@@ -84,7 +92,7 @@ router.get('/all-users', verifyToken, async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
-    res.json(users);
+    res.json(users.map((u) => withDocUrl(req, u)));
   } catch (err) {
     res.status(500).json({ msg: 'Failed to fetch users', error: err.message });
   }
@@ -100,6 +108,7 @@ router.patch('/verify-user/:id', verifyToken, async (req, res) => {
       data: {
         isVerified: true,
       },
+      select: { id: true, name: true, email: true, isVerified: true },
     });
 
     res.json({ msg: 'User verified successfully', user: updatedUser });

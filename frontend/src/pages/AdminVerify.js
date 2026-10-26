@@ -61,7 +61,7 @@ export default function AdminVerify() {
             <h6><strong>Document Preview:</strong></h6>
 
             {/* PDF */}
-            {user.documentUrl.toLowerCase().endsWith(".pdf") ? (
+            {(user.documentType === "pdf" || user.documentUrl.toLowerCase().endsWith(".pdf")) ? (
               <iframe
                 src={fullDocUrl}
                 title="Document Preview"

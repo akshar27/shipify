@@ -14,7 +14,8 @@ const server = http.createServer(app); // ⬅️ Create HTTP server
 // ✅ Wide open CORS for debugging
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Only profile photos are public. Identity documents are never served from here (see utils/documents.js).
+app.use('/uploads/profile', express.static(path.join(__dirname, 'uploads', 'profile')));
 
 // All your routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -24,6 +25,7 @@ app.use('/api/match', require('./routes/matchRoutes'));
 app.use('/api/request', require('./routes/requestRoutes'));
 app.use('/api/verification', require('./routes/verificationRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/documents', require('./routes/documentRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
