@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Navigate } from "react-router-dom";
 import axios from "axios";
+import { API_BASE } from "../config";
 
 export default function MatchTrips() {
   const { deliveryId } = useParams();
@@ -13,7 +14,7 @@ export default function MatchTrips() {
   useEffect(() => {
     const fetchMatches = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/match/${deliveryId}`);
+        const res = await axios.get(`${API_BASE}/match/${deliveryId}`);
         setTrips(res.data);
       } catch (err) {
         console.error("Failed to fetch matches", err);
@@ -30,7 +31,7 @@ export default function MatchTrips() {
 
   const handleRequest = async (travelerId) => {
     try {
-      await axios.post("http://localhost:5000/api/request", {
+      await axios.post(`${API_BASE}/request`, {
         deliveryId,
         travelerId,
       });

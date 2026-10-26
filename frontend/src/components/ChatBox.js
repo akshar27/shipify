@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import API from "../services/api";
+import { API_ORIGIN } from "../config";
 
 // ✅ Create a single socket instance (outside the component to avoid re‑connecting)
-const socket = io("http://localhost:5000", {
+const socket = io(API_ORIGIN, {
   auth: {
     token: localStorage.getItem("token"), // token from login
   },

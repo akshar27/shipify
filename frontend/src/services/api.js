@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_BASE } from '../config';
 
 const API = axios.create({
-  baseURL: 'http://localhost:5050/api', // Adjust if your backend is hosted differently
+  baseURL: API_BASE,
 });
 
 // Automatically include token
