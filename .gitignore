@@ -12,3 +12,7 @@ logs
 # IDEs
 .vscode/
 .idea/
+
+# Locally saved uploads (dev fallback when AWS is not configured) - may contain ID documents
+backend/uploads/documents/
+backend/uploads/profile/

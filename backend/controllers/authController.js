@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../config/prisma');
 const crypto = require('crypto');
-const nodemailer = require('nodemailer');
+const { sendMail } = require('../utils/mailer');
 
 const { OAuth2Client } = require("google-auth-library");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -42,20 +42,12 @@ exports.registerUser = async (req, res) => {
     });
 
     // SEND EMAIL VERIFICATION EMAIL
-    const transporter = nodemailer.createTransport({
-      service: 'Gmail',
-      auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASS,
-      }
-    });
-
     const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${emailToken}`;
 
-    await transporter.sendMail({
-      from: process.env.SMTP_EMAIL,
+    await sendMail({
       to: email,
       subject: "Verify your email",
+      link: verifyUrl,
       html: `<p>Click <a href="${verifyUrl}">here</a> to verify your email.</p>`
     });
 
@@ -111,20 +103,12 @@ exports.forgotPassword = async (req, res) => {
     }
   });
 
-  const transporter = nodemailer.createTransport({
-    service: 'Gmail',
-    auth: {
-      user: process.env.SMTP_EMAIL,
-      pass: process.env.SMTP_PASS,
-    }
-  });
-
   const resetUrl = `${process.env.CLIENT_URL}/reset-password/${token}`;
 
-  await transporter.sendMail({
-    from: process.env.SMTP_EMAIL,
+  await sendMail({
     to: user.email,
     subject: "Reset your password",
+    link: resetUrl,
     html: `<p>Click <a href="${resetUrl}">here</a> to reset your password.</p>`
   });
 
@@ -201,20 +185,12 @@ exports.resendVerification = async (req, res) => {
       data: { emailToken: newToken }
     });
 
-    const transporter = nodemailer.createTransport({
-      service: "Gmail",
-      auth: {
-        user: process.env.SMTP_EMAIL,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
     const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${newToken}`;
 
-    await transporter.sendMail({
-      from: process.env.SMTP_EMAIL,
+    await sendMail({
       to: email,
       subject: "Verify your email (Resent)",
+      link: verifyUrl,
       html: `<p>Click <a href="${verifyUrl}">here</a> to verify your email.</p>`
     });
 

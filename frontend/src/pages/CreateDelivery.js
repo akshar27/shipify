@@ -10,7 +10,10 @@ import {
 } from "@react-google-maps/api";
 
 // Initialize Stripe
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
+// Only when a key is set: loadStripe(undefined) throws at import time and takes the whole app down.
+const stripePromise = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 const mapStyle = { height: "300px", width: "100%" };
 const defaultCenter = { lat: 37.7749, lng: -122.4194 };
@@ -55,7 +58,7 @@ export default function CreateDelivery() {
       const res = await API.post("/deliveries", payload);
       const deliveryId = res.data.deliveryId;
 
-      const stripe = await stripePromise;
+      if (stripePromise) await stripePromise;
       const session = await API.post("/payments/create-checkout-session", {
         deliveryId,
         amount: 10.0,
