@@ -104,7 +104,7 @@ test("only the assigned traveler (or an admin) can complete a delivery", async (
 });
 
 // ------------------------------------------------------------------------------------------------ what travelers can see
-test("travelers see paid, unclaimed deliveries and their own jobs, never unpaid or someone else's", async () => {
+test("travelers see paid, unclaimed deliveries and their own jobs (finished ones too), never unpaid or someone else's", async () => {
   const sender = await verifiedUser();
   const me = await verifiedUser();
   const other = await verifiedUser();
@@ -117,7 +117,8 @@ test("travelers see paid, unclaimed deliveries and their own jobs, never unpaid 
   const refunded = await newDelivery(sender, { paymentStatus: "refunded" });
 
   const ids = (await prisma.delivery.findMany({ where: { ...visibleToTraveler(me.id), id: { in: [unpaid, open, mine, theirs, own, delivered, refunded].map((d) => d.id) } } })).map((d) => d.id).sort();
-  assert.deepEqual(ids, [open.id, mine.id].sort());
+  // my finished job stays visible to me (so I can see it was delivered / confirmed); the refunded one and others' jobs never are
+  assert.deepEqual(ids, [open.id, mine.id, delivered.id].sort());
 });
 
 // ------------------------------------------------------------------------------------------------ requests (used to have no auth at all)

@@ -48,13 +48,20 @@ export default function MatchesForTraveler() {
     }
   };
 
+  // The traveler marks a package delivered by typing the 6-digit code the recipient reads out from the sender's app.
+  const [codeFor, setCodeFor] = useState(null); // deliveryId whose code form is open
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState("");
+
   const handleComplete = async (deliveryId) => {
+    setCodeError("");
     try {
-      await API.patch(`/deliveries/${deliveryId}/complete`);
+      await API.patch(`/deliveries/${deliveryId}/complete`, { code });
       updateStatus(deliveryId, "delivered");
+      setCodeFor(null);
+      setCode("");
     } catch (err) {
-      console.error("Complete failed", err);
-      alert("Failed to mark as delivered");
+      setCodeError(err.response?.data?.msg || "Could not mark as delivered");
     }
   };
 
@@ -110,14 +117,37 @@ export default function MatchesForTraveler() {
                     </button>
                   )}
 
-                  {d.status === "accepted" && (
+                  {(d.status === "accepted" || d.status === "in-transit") && (
                     <>
-                      <button
-                        className="btn btn-warning"
-                        onClick={() => handleComplete(d.id)}
-                      >
-                        Mark as Delivered
-                      </button>
+                      {codeFor === d.id ? (
+                        <div className="mb-2">
+                          <label className="form-label">Ask the person receiving the package for their 6-digit code</label>
+                          <div className="input-group" style={{ maxWidth: 320 }}>
+                            <input
+                              className="form-control"
+                              inputMode="numeric"
+                              maxLength={6}
+                              placeholder="123456"
+                              value={code}
+                              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                            />
+                            <button className="btn btn-warning" disabled={code.length !== 6} onClick={() => handleComplete(d.id)}>
+                              Confirm
+                            </button>
+                            <button className="btn btn-outline-secondary" onClick={() => { setCodeFor(null); setCode(""); setCodeError(""); }}>
+                              Cancel
+                            </button>
+                          </div>
+                          {codeError && <div className="text-danger mt-1">{codeError}</div>}
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn-warning"
+                          onClick={() => { setCodeFor(d.id); setCode(""); setCodeError(""); }}
+                        >
+                          Mark as Delivered
+                        </button>
+                      )}
 
                       <button
                         className="btn btn-outline-success ms-2"
@@ -129,7 +159,13 @@ export default function MatchesForTraveler() {
                   )}
 
                   {d.status === "delivered" && (
-                    <span className="badge bg-success">Delivered</span>
+                    <span className="badge bg-success">Delivered. Waiting for the sender to confirm</span>
+                  )}
+                  {d.status === "confirmed" && (
+                    <span className="badge bg-success">Confirmed. Your payout is being arranged</span>
+                  )}
+                  {d.status === "disputed" && (
+                    <span className="badge bg-warning text-dark">Under review by support</span>
                   )}
                 </div>
               </div>

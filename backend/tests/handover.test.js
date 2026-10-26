@@ -251,6 +251,7 @@ test("ready list shows what each traveler is owed; marking paid works once and r
   assert.ok(mine);
   assert.equal(list.body.find((x) => x.id === unfinished.id), undefined);
   assert.deepEqual([mine.grossCents, mine.feeCents, mine.netCents, mine.currency], [1000, 200, 800, "usd"]);
+  assert.equal(mine.confirmedBy, "sender");
   assert.equal(mine.traveler.email, traveler.email);
   assert.ok(!JSON.stringify(list.body).includes("handoverSalt"));
   assert.ok(!JSON.stringify(list.body).includes("$2"), "no password hashes");
@@ -312,6 +313,8 @@ test("disputes: the admin sees them and can release the money to the traveler", 
   assert.match(r.resolutionNote, /Recipient confirmed/);
   assert.equal((await resolve({ action: "release", note: "again please" })).status, 409, "already resolved");
   assert.equal((await prisma.delivery.count({ where: { ...payoutReadyWhere(), id: d.id } })), 1, "now due for payout");
+  const ready = await request(app).get("/api/admin/payouts/ready").set(auth(admin.token));
+  assert.equal(ready.body.find((x) => x.id === d.id).confirmedBy, "admin", "the payout screen must say an admin released it, not the sender");
 });
 
 test("disputes: a refund goes through Stripe once, closes the delivery and is never payable to the traveler", async () => {

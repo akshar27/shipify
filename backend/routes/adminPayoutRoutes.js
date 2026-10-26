@@ -36,7 +36,8 @@ router.get("/payouts/ready", async (_req, res, next) => {
             payments: undefined,
             currency: p.currency,
             ...splitAmount(p.amountCents),
-            confirmedBy: d.status === "confirmed" ? "sender" : "timeout",
+            // who made it payable: the sender, an admin who released a dispute, or the silent confirm window
+            confirmedBy: d.status !== "confirmed" ? "timeout" : d.resolutionNote?.startsWith("Released to traveler") ? "admin" : "sender",
             readySince: d.status === "confirmed" ? d.confirmedAt : new Date(d.deliveredAt.getTime() + confirmWindowMs()),
           };
         })

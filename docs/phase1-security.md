@@ -47,6 +47,34 @@ Tested with a fake Stripe client for session creation and Stripe's real signing 
 3. Pay with test card `4242 4242 4242 4242` and watch the delivery flip to `paid` on My Deliveries.
 4. Check the nginx config passes the raw request body to Node unchanged (no body rewriting on that path).
 
+## Handover code, delivery confirmation and manual payouts (third part of this branch)
+
+How a delivery now ends, and how money reaches the traveler:
+
+1. A traveler accepts a paid delivery. The sender can open **Show handover code** in My Deliveries (6 digits).
+2. The sender gives the code to whoever receives the package. The traveler asks the recipient for it and enters it at drop-off
+   (**Mark as Delivered**). The code is not stored: it is derived from the delivery id, a per-delivery salt and a server
+   secret. Five wrong tries lock the delivery (an admin can complete it).
+3. The sender has `AUTO_CONFIRM_HOURS` (72) to **Confirm** or **Report a problem**. If they do nothing, it counts as confirmed.
+4. **Admin > Payouts > Ready to pay** lists every traveler who is owed money, with the platform fee already taken off
+   (`PLATFORM_FEE_PERCENT`, 20 by default). You pay the traveler yourself (bank transfer, Zelle, whatever you use), type the
+   reference, and press **Mark as paid**. A delivery can be paid out once; the screen keeps the history.
+5. **Disputes**: the sender's report freezes the payout. The admin writes a decision note and either **Releases** the money to
+   the traveler (it then shows up in Ready to pay) or **Refunds** the sender through Stripe (asks for a second click).
+
+Tested: 71 backend tests; the sender and admin screens were also clicked through in a browser against the dev server
+(show code, wrong and right code, confirm, report, mark paid, release, refund failing safely without Stripe).
+**The traveler's page (Requests to Me) was not exercised in a browser**: it lists jobs through Google Maps routing, which needs a
+key. Its code-entry form is covered by the API tests and compiles under `CI=true`, but click through it once you have a Maps key.
+
+Things this does not solve, so you can decide how much they matter for the beta:
+- **Traveler no-shows.** If a traveler accepts and disappears, nothing happens until the sender reports a problem. There is no
+  automatic timeout or re-listing.
+- **Collusion.** A sender and traveler who are the same person (two accounts) can still run money through the platform; the
+  code only proves the recipient had the code, not that a package moved. Keep the beta to people you can identify.
+- **No notifications.** Nobody is emailed when a delivery is accepted, delivered, disputed or paid out. Users have to look.
+- Payouts are manual and only recorded here; the app never moves money to a traveler.
+
 ## Before merging to `main` (production impact)
 
 1. **Set `CORS_ORIGINS` on the server** to the real site origin (e.g. `https://shipify.example.com`). The default is
@@ -67,15 +95,15 @@ Tested with a fake Stripe client for session creation and Stripe's real signing 
    becomes `paymentStatus = 'unpaid'`, so open deliveries from before this change **disappear from traveler matches** until
    they are marked paid. Review open rows and set `paymentStatus = 'paid'` for any that were really paid in Stripe.
    Deliveries already `accepted` have no `travelerId`; nobody can complete them except an admin until you assign one.
-9. The first deploy runs `npm install --production`, which now needs the new dependencies (helmet, express-rate-limit,
+9. **A second migration, `handover_confirmation_payouts`** (additive: delivery columns and a `Payout` table). Deliveries that are
+   already `accepted` get a handover code the first time their sender opens it. Create at least one admin
+   (`ADMIN_EMAIL=you@example.com node scripts/createAdmin.js`) so someone can use the Payouts screen.
+10. The first deploy runs `npm install --production`, which now needs the new dependencies (helmet, express-rate-limit,
    zod). That is automatic, but check the pm2 logs after deploying.
 
 ## Known gaps (not done in this phase)
 
-- **Money movement after payment:** the sender's payment is recorded, but nothing pays the traveler out (Stripe Connect),
-  and there is no refund endpoint (a refund made in the Stripe dashboard is picked up by the webhook). "Delivered" is marked
-  by the traveler, so before payouts exist it needs a sender confirmation or a handover code, or a traveler could mark
-  anything delivered and claim the money.
+- **Automatic payouts (Stripe Connect):** payouts are manual for now (see above). Build Connect only once the idea has proven itself.
 - Broken or dead routes found on the way and **not** fixed: the frontend calls `/api/ratings/...` but the server mounts
   `/rating`; `MatchTrips` calls `GET /api/match/:id`, which does not exist; `matches-for-traveler` calls the Google
   Directions API for every trip on every request with no caching (cost, and slow).

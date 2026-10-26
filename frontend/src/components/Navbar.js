@@ -53,11 +53,16 @@ export default function Navbar() {
 
             {/* Logged in as Admin */}
             {token && user?.role === "admin" && (
+              <>
+              <li className="nav-item">
+                <Link className="nav-link" to="/admin/payouts">Payouts</Link>
+              </li>
               <li className="nav-item">
                 <button onClick={handleLogout} className="btn btn-sm btn-light">
                   Logout
                 </button>
               </li>
+              </>
             )}
 
             {/* Logged in as Regular User */}

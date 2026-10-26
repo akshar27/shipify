@@ -13,6 +13,7 @@ import UploadDocument from "./pages/UploadDocument";
 import AdminVerify from "./pages/AdminVerify";
 import Navbar from "./components/Navbar";
 import Admin from "./pages/Admin";
+import AdminPayouts from "./pages/AdminPayouts";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import { jwtDecode } from "jwt-decode";
 import ProfilePage from "./pages/Profile";
@@ -47,6 +48,7 @@ function App() {
           <Route path="/upload-doc" element={<UploadDocument />} />
           <Route path="/admin/verify/:id" element={<AdminVerify />} />
           <Route path="/admin" element={<Admin user={user} />} />
+          <Route path="/admin/payouts" element={<AdminPayouts />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/public-profile/:id" element={<PublicProfile />} />

@@ -2,13 +2,13 @@ const { newSalt } = require("./handover");
 
 // The rules for who may see and move a delivery, in one place. Routes call these instead of each writing their own query.
 
-// The jobs a traveler may see: paid and not yet taken (by anyone), or the ones they have taken themselves.
+// The jobs a traveler may see: paid and not yet taken (by anyone), or the ones they have taken themselves (including how those ended).
 // An unpaid delivery is never shown to travelers, and nobody sees another traveler's accepted job.
 exports.visibleToTraveler = (userId) => ({
   senderId: { not: userId },
   OR: [
     { status: "pending", paymentStatus: "paid", travelerId: null },
-    { travelerId: userId, status: { in: ["accepted", "in-transit"] } },
+    { travelerId: userId, status: { in: ["accepted", "in-transit", "delivered", "confirmed", "disputed"] } },
   ],
 });
 
