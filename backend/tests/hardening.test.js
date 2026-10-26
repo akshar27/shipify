@@ -48,10 +48,11 @@ test("oversized and malformed JSON bodies get clean errors", async () => {
 
 test("payments answer 503 (not a crash) when Stripe is not configured", async () => {
   const user = await createUser();
+  await require("./helpers").prisma.user.update({ where: { id: user.id }, data: { isVerified: true } }); // checkout requires a verified user
   // note: the auth limiter above is at its cap for /api/auth, but /api/auth/login is not used here: tokens are minted directly
   const jwt = require("jsonwebtoken");
   const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: 60 });
-  const res = await request(app).post("/api/payments/create-checkout-session").set("Authorization", `Bearer ${token}`).send({ amount: 10, deliveryId: "x" });
+  const res = await request(app).post("/api/payments/create-checkout-session").set("Authorization", `Bearer ${token}`).send({ deliveryId: "7f9c2d44-1b0e-4f3a-9d57-0a6b1c2d3e4f" });
   assert.equal(res.status, 503);
   assert.match(res.body.msg, /not configured/);
 });

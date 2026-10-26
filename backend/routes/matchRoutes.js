@@ -5,6 +5,7 @@ const prisma = require("../config/prisma");
 const axios = require("axios");
 const polyline = require("@mapbox/polyline");
 const { isPointNearRoute } = require("../utils/geo");
+const { visibleToTraveler } = require("../utils/deliveryState");
 
 const MAX_RADIUS_KM = 15; // temporarily increase for debugging
 
@@ -20,12 +21,7 @@ router.get("/matches-for-traveler", verifyToken, async (req, res) => {
     }
 
     const deliveries = await prisma.delivery.findMany({
-      where: {
-        senderId: { not: req.user.id },
-        status: {
-          in: ["pending", "accepted"],
-        },
-      },
+      where: visibleToTraveler(req.user.id),
       include: {
         sender: {
           select: { id: true, name: true, email: true },

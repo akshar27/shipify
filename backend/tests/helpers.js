@@ -49,6 +49,15 @@ async function loginToken(app, user) {
 const mine = { email: { startsWith: "", contains: `.${process.pid}.`, endsWith: "@shipify-test.local" } };
 
 async function cleanup() {
+  // Children before parents (foreign keys), and only rows that belong to users this process created.
+  const theirDeliveries = { OR: [{ sender: mine }, { traveler: mine }] };
+  await prisma.payment.deleteMany({ where: { OR: [{ user: mine }, { delivery: theirDeliveries }] } });
+  await prisma.stripeEvent.deleteMany({ where: { id: { contains: `_${process.pid}_` } } });
+  await prisma.message.deleteMany({ where: { OR: [{ sender: mine }, { receiver: mine }, { delivery: theirDeliveries }] } });
+  await prisma.rating.deleteMany({ where: { OR: [{ rater: mine }, { receiver: mine }, { delivery: theirDeliveries }] } });
+  await prisma.deliveryRequest.deleteMany({ where: { OR: [{ traveler: mine }, { delivery: theirDeliveries }] } });
+  await prisma.delivery.deleteMany({ where: theirDeliveries });
+  await prisma.trip.deleteMany({ where: { traveler: mine } });
   await prisma.verificationRequest.deleteMany({ where: { user: mine } });
   await prisma.user.deleteMany({ where: mine });
   fs.rmSync(process.env.PRIVATE_UPLOAD_DIR, { recursive: true, force: true });

@@ -19,6 +19,8 @@ app.set('trust proxy', env.TRUST_PROXY);
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: env.corsOrigins }));
 app.use(globalLimiter);
+// Stripe signs the exact bytes it sends, so this one route must see the raw body, before the JSON parser touches it.
+app.use('/api/payments/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
 app.use(express.json({ limit: '100kb' }));
 // Only profile photos are public. Identity documents are never served from here (see utils/documents.js).
 app.use('/uploads/profile', express.static(path.join(__dirname, 'uploads', 'profile')));

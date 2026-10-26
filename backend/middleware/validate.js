@@ -4,7 +4,22 @@ const { z } = require("zod");
 const password = z.string().min(8, "Password must be at least 8 characters").max(72, "Password is too long");
 const email = z.string().trim().toLowerCase().email("Enter a valid email").max(254);
 
+// Optional coordinates arrive as numbers or numeric strings, or not at all (the user typed an address without picking a suggestion).
+const coord = (min, max) => z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().min(min).max(max).optional());
+
 exports.schemas = {
+  delivery: z.object({
+    pickup: z.string().trim().min(1).max(300),
+    dropoff: z.string().trim().min(1).max(300),
+    pickupLat: coord(-90, 90),
+    pickupLng: coord(-180, 180),
+    dropoffLat: coord(-90, 90),
+    dropoffLng: coord(-180, 180),
+    itemType: z.string().trim().min(1).max(100),
+    size: z.string().trim().min(1).max(100),
+    weight: z.coerce.number().positive().max(1000),
+  }),
+  id: z.object({ id: z.string().uuid() }),
   register: z.object({
     name: z.string().trim().min(1, "Name is required").max(100),
     email,

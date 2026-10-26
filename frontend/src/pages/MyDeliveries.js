@@ -27,6 +27,15 @@ export default function MyDeliveries() {
     loadDeliveries();
   }, []);
 
+  const payNow = async (deliveryId) => {
+    try {
+      const res = await API.post("/payments/create-checkout-session", { deliveryId });
+      window.location.href = res.data.url;
+    } catch (err) {
+      alert(err.response?.data?.msg || "Payment could not be started");
+    }
+  };
+
   const openRating = (d) => {
     setSelectedDelivery(d);
     setShowRating(true);
@@ -46,8 +55,15 @@ export default function MyDeliveries() {
           <p>
             <strong>Pickup:</strong> {d.pickup} <br />
             <strong>Dropoff:</strong> {d.dropoff} <br />
-            <strong>Status:</strong> {d.status}
+            <strong>Status:</strong> {d.status} <br />
+            <strong>Payment:</strong> {d.paymentStatus || "unpaid"}
           </p>
+
+          {d.paymentStatus === "unpaid" && d.status === "pending" && (
+            <button className="btn btn-primary me-2" onClick={() => payNow(d.id)}>
+              Pay now
+            </button>
+          )}
 
           {d.status === "delivered" &&
             d.requests?.length > 0 &&

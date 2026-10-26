@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import API from "../services/api";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   GoogleMap,
@@ -19,6 +19,7 @@ const mapStyle = { height: "300px", width: "100%" };
 const defaultCenter = { lat: 37.7749, lng: -122.4194 };
 
 export default function CreateDelivery() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     itemType: "",
     size: "",
@@ -56,17 +57,20 @@ export default function CreateDelivery() {
       };
 
       const res = await API.post("/deliveries", payload);
-      const deliveryId = res.data.deliveryId;
+      const deliveryId = res.data.id; // the API returns the delivery itself, not { deliveryId }
 
-      if (stripePromise) await stripePromise;
-      const session = await API.post("/payments/create-checkout-session", {
-        deliveryId,
-        amount: 10.0,
-      });
-
-      window.location.href = session.data.url;
+      try {
+        if (stripePromise) await stripePromise;
+        // The server decides the price; the browser only says which delivery to pay for.
+        const session = await API.post("/payments/create-checkout-session", { deliveryId });
+        window.location.href = session.data.url;
+      } catch (payErr) {
+        // The delivery exists but is unpaid: it can be paid from My Deliveries.
+        alert((payErr.response?.data?.msg || "Payment could not be started") + " Your delivery was saved; you can pay for it from My Deliveries.");
+        navigate("/my-deliveries");
+      }
     } catch (err) {
-      alert(err.response?.data?.msg || "Failed to create delivery or payment");
+      alert(err.response?.data?.msg || "Failed to create delivery");
     }
   };
 

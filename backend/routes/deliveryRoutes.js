@@ -4,9 +4,11 @@ const verifyToken = require('../middleware/auth');
 const prisma = require('../config/prisma');
 const ensureVerified = require('../middleware/ensureVerified');
 const { haversineDistance } = require('../utils/geo');
+const { validate, schemas } = require('../middleware/validate');
+const { claimDelivery } = require('../utils/deliveryState');
 
 // Create delivery
-router.post('/', verifyToken, ensureVerified, async (req, res) => {
+router.post('/', verifyToken, ensureVerified, validate(schemas.delivery), async (req, res) => {
   const { pickup, dropoff, pickupLat, pickupLng, dropoffLat, dropoffLng, itemType, size, weight } = req.body;
   try {
     const delivery = await prisma.delivery.create({
@@ -14,19 +16,19 @@ router.post('/', verifyToken, ensureVerified, async (req, res) => {
         senderId: req.user.id,
         pickup,
         dropoff,
-        pickupLat: parseFloat(pickupLat),
-        pickupLng: parseFloat(pickupLng),
-        dropoffLat: parseFloat(dropoffLat),
-        dropoffLng: parseFloat(dropoffLng),
+        pickupLat,
+        pickupLng,
+        dropoffLat,
+        dropoffLng,
         itemType,
         size,
-        weight: parseFloat(weight)
+        weight
       },
     });
     res.status(201).json(delivery);
   } catch (err) {
     console.error("Delivery creation error:", err);
-    res.status(500).json({ msg: 'Failed to create delivery', error: err.message });
+    res.status(500).json({ msg: 'Failed to create delivery' });
   }
 });
 
@@ -115,34 +117,42 @@ router.get('/mine', verifyToken, async (req, res) => {
 //   }
 // });
 
-router.patch('/:id/complete', verifyToken, ensureVerified, async (req, res) => {
+// The assigned traveler marks the package delivered. Nobody else can (an admin may, to fix a stuck job).
+router.patch('/:id/complete', verifyToken, ensureVerified, async (req, res, next) => {
+  if (!schemas.id.safeParse(req.params).success) return res.status(404).json({ msg: 'Delivery not found' });
   const { id } = req.params;
 
   try {
-    const delivery = await prisma.delivery.update({
-      where: { id },
-      data: { status: 'delivered' }
+    const { count } = await prisma.delivery.updateMany({
+      where: {
+        id,
+        status: { in: ['accepted', 'in-transit'] },
+        ...(req.user.role === 'admin' ? {} : { travelerId: req.user.id }),
+      },
+      data: { status: 'delivered' },
     });
+    if (count !== 1) return res.status(409).json({ msg: 'This delivery cannot be completed by you right now' });
 
+    const delivery = await prisma.delivery.findUnique({ where: { id } });
     res.json({ msg: 'Delivery marked as complete', delivery });
   } catch (err) {
-    res.status(500).json({ msg: 'Failed to mark as complete', error: err.message });
+    next(err);
   }
 });
 
-// Accept a delivery by traveler
-router.patch('/:id/accept', verifyToken, ensureVerified, async (req, res) => {
+// A traveler takes a paid, unclaimed delivery. The claim is one conditional UPDATE, so two travelers cannot both get it.
+router.patch('/:id/accept', verifyToken, ensureVerified, async (req, res, next) => {
+  if (!schemas.id.safeParse(req.params).success) return res.status(404).json({ msg: 'Delivery not found' });
   const { id } = req.params;
 
   try {
-    const delivery = await prisma.delivery.update({
-      where: { id },
-      data: { status: 'accepted' }
-    });
+    const claimed = await claimDelivery(prisma, id, req.user.id, 'accepted');
+    if (!claimed) return res.status(409).json({ msg: 'This delivery is not available' });
 
+    const delivery = await prisma.delivery.findUnique({ where: { id } });
     res.json({ msg: 'Delivery accepted by traveler', delivery });
   } catch (err) {
-    res.status(500).json({ msg: 'Failed to accept delivery', error: err.message });
+    next(err);
   }
 });
 

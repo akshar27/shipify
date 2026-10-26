@@ -18,6 +18,35 @@ What changed on branch `phase1-hardening`, and what must happen **before this is
 | `createAdmin.js` used a published default password | Requires `ADMIN_EMAIL`; password from `ADMIN_PASSWORD` or generated and shown once |
 | No tests; every push to `main` deployed | 27 backend tests, CI (backend tests + frontend build), deploy now `needs: ci` |
 
+## Payments and the delivery lifecycle (second part of this branch)
+
+Reading the payment code turned up more than a missing webhook, so this is a rework of how a delivery moves from
+"created" to "delivered":
+
+| Problem | Fix |
+|---|---|
+| The browser chose the amount (`amount: 10.0`), so a sender could pay $0.01 | Price comes from `DELIVERY_FEE_CENTS` on the server; the browser sends only the delivery id |
+| Anyone could start a checkout for any delivery id | Only the delivery's sender; others get 404 |
+| "Payment Successful" page shown to anyone who opened the URL; nothing recorded the payment | `Payment` table; a delivery becomes `paid` only through the signature-verified Stripe webhook; the success page asks the server and polls |
+| No webhook idempotency or amount check | Each event id is stored once (replays are no-ops); amount and currency must match what the server asked for |
+| `POST /api/request` and `PATCH /api/request/:id/accept` had **no authentication** | Login required; the sender must own the delivery; only the requested traveler can accept; one transaction claims the delivery |
+| Any verified user could mark any delivery accepted or delivered; accepting never recorded who the traveler was | `Delivery.travelerId`; accepting is one conditional UPDATE (two travelers cannot both win); only the assigned traveler (or an admin) can complete |
+| Travelers saw every pending delivery, paid or not, and other travelers' accepted ones | Only paid, unclaimed deliveries plus your own jobs |
+| `GET /api/request/mine` returned the sender's whole user row, password hash included | Selected fields only |
+| `CreateDelivery` read `res.data.deliveryId`, which the API never returns, so checkout was started with `undefined` | Uses `res.data.id` |
+
+Tested with a fake Stripe client for session creation and Stripe's real signing and verification code for webhooks.
+**Not tested against real Stripe.** Do a full run in test mode (see below) before taking real money.
+
+### Setting up Stripe (test mode first)
+
+1. Set `STRIPE_SECRET_KEY` (`sk_test_...`) and `DELIVERY_FEE_CENTS` on the server.
+2. Add a webhook endpoint `https://<api-host>/api/payments/webhook` in the Stripe dashboard with the events
+   `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.expired`, `charge.refunded`;
+   put its signing secret in `STRIPE_WEBHOOK_SECRET`. Locally: `stripe listen --forward-to localhost:5050/api/payments/webhook`.
+3. Pay with test card `4242 4242 4242 4242` and watch the delivery flip to `paid` on My Deliveries.
+4. Check the nginx config passes the raw request body to Node unchanged (no body rewriting on that path).
+
 ## Before merging to `main` (production impact)
 
 1. **Set `CORS_ORIGINS` on the server** to the real site origin (e.g. `https://shipify.example.com`). The default is
@@ -34,13 +63,22 @@ What changed on branch `phase1-hardening`, and what must happen **before this is
    (copy the object, store `doc:<key>`, remove the public ACL), then treat the old URLs as compromised.
 7. **Purge `backend/uploads/`** from git history. Seven files were committed in 2025 (5 PDFs). If they are real documents,
    removing them from the working tree is not enough. Use `git filter-repo`, then force-push.
-8. The first deploy runs `npm install --production`, which now needs the new dependencies (helmet, express-rate-limit,
+8. **The migration runs `payments_and_delivery_traveler`** (additive: two columns, two tables). Every existing delivery
+   becomes `paymentStatus = 'unpaid'`, so open deliveries from before this change **disappear from traveler matches** until
+   they are marked paid. Review open rows and set `paymentStatus = 'paid'` for any that were really paid in Stripe.
+   Deliveries already `accepted` have no `travelerId`; nobody can complete them except an admin until you assign one.
+9. The first deploy runs `npm install --production`, which now needs the new dependencies (helmet, express-rate-limit,
    zod). That is automatic, but check the pm2 logs after deploying.
 
 ## Known gaps (not done in this phase)
 
-- **Payments:** no Stripe webhook and no payment record, so "paid" is decided by the browser reaching `/payment-success`.
-  This is the next thing to build.
+- **Money movement after payment:** the sender's payment is recorded, but nothing pays the traveler out (Stripe Connect),
+  and there is no refund endpoint (a refund made in the Stripe dashboard is picked up by the webhook). "Delivered" is marked
+  by the traveler, so before payouts exist it needs a sender confirmation or a handover code, or a traveler could mark
+  anything delivered and claim the money.
+- Broken or dead routes found on the way and **not** fixed: the frontend calls `/api/ratings/...` but the server mounts
+  `/rating`; `MatchTrips` calls `GET /api/match/:id`, which does not exist; `matches-for-traveler` calls the Google
+  Directions API for every trip on every request with no caching (cost, and slow).
 - Reset and email tokens are stored in plain text in the DB (hash them).
 - Socket.IO authenticates the JWT but, unlike the HTTP routes, does not re-check the user in the DB.
 - `nodemailer` (high) and `aws-sdk` v2 (moderate) still have advisories that need major upgrades; `aws-sdk` v2 is end-of-life.

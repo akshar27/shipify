@@ -12,6 +12,12 @@ const schema = z.object({
   // Number of reverse proxies in front of the app (nginx etc.), so rate limiting sees real client IPs. 0 = none.
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   // Requests per 15 minutes per IP: everything, and the login/register/reset endpoints specifically.
+  // Payments. Without STRIPE_SECRET_KEY the payment routes answer 503; the webhook also needs STRIPE_WEBHOOK_SECRET.
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // What a sender pays per delivery, in cents. Decided here, never by the browser.
+  DELIVERY_FEE_CENTS: z.coerce.number().int().min(50).max(100000).default(1000),
+  PAYMENT_CURRENCY: z.string().length(3).toLowerCase().default("usd"),
   GLOBAL_RATE_LIMIT: z.coerce.number().int().min(1).default(600),
   AUTH_RATE_LIMIT: z.coerce.number().int().min(1).default(20),
 });
