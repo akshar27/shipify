@@ -144,6 +144,17 @@ test("a delivery needs a declared value under the cap and the prohibited-items c
   assert.equal(cents.body.declaredValueCents, 1999);
 });
 
+test("missing or unreadable numbers get a plain message, never a validation-library one", async () => {
+  const sender = await person();
+  const msg = async (body) => (await post("/api/deliveries", sender.token, body)).body.msg;
+  assert.equal(await msg({ ...goodDelivery, declaredValue: undefined }), "Enter the item's value");
+  assert.equal(await msg({ ...goodDelivery, declaredValue: "lots" }), "Enter the item's value");
+  assert.equal(await msg({ ...goodDelivery, weight: "heavy" }), "Enter the weight in kg");
+  assert.equal(await msg({ ...goodDelivery, weight: undefined }), "Enter the weight in kg");
+  assert.match(await msg({ ...goodDelivery, declaredValue: 500 }), /cannot be more than 200/);
+  for (const m of [await msg({ ...goodDelivery, declaredValue: NaN }), await msg({ ...goodDelivery, weight: null })]) assert.ok(!/NaN|expected number|Invalid input/.test(m), m);
+});
+
 test("travelers see the declared value of a delivery they might take", async () => {
   const sender = await person();
   const traveler = await person();

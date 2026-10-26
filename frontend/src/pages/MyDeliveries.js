@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import API from "../services/api";
 import RatingModal from "../components/RatingModal";
 
@@ -16,6 +17,7 @@ const STATUS_TEXT = {
 };
 
 export default function MyDeliveries() {
+  const flash = useLocation().state?.notice; // e.g. "Payment could not be started... press Pay now"
   const [deliveries, setDeliveries] = useState([]);
   const [showRating, setShowRating] = useState(false);
   const [selectedDelivery, setSelectedDelivery] = useState(null);
@@ -102,6 +104,8 @@ export default function MyDeliveries() {
   return (
     <div className="container mt-5">
       <h2>My Deliveries</h2>
+
+      {flash && <div className="alert alert-info">{flash}</div>}
 
       {deliveries.map((d) => (
         <div className="card p-3 mb-3" key={d.id}>

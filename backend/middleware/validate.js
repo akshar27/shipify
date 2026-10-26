@@ -9,6 +9,10 @@ const email = z.string().trim().toLowerCase().email("Enter a valid email").max(2
 // Must be exactly `true` (a missing or false value gets the given message, not a type error).
 const mustBeTrue = (message) => z.any().refine((v) => v === true, { message });
 
+// A number field that may arrive as a string or not at all: missing or unreadable input gets a plain-language message
+// instead of zod's "expected number, received NaN".
+const num = (message) => z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : Number(v)), z.any().refine((v) => typeof v === "number" && Number.isFinite(v), { message }));
+
 const coord = (min, max) => z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().min(min).max(max).optional());
 
 exports.schemas = {
@@ -21,9 +25,9 @@ exports.schemas = {
     dropoffLng: coord(-180, 180),
     itemType: z.string().trim().min(1).max(100),
     size: z.string().trim().min(1).max(100),
-    weight: z.coerce.number().positive().max(1000),
+    weight: num("Enter the weight in kg").pipe(z.number().positive("Enter the weight in kg").max(1000, "The weight cannot be more than 1000 kg")),
     // What the sender says the item is worth (in the platform currency's major unit) and that it is not on the prohibited list.
-    declaredValue: z.coerce.number().positive("Enter the item's value").max(env.MAX_ITEM_VALUE_CENTS / 100, `The declared value cannot be more than ${env.MAX_ITEM_VALUE_CENTS / 100}: more valuable items are not allowed`),
+    declaredValue: num("Enter the item's value").pipe(z.number().positive("Enter the item's value").max(env.MAX_ITEM_VALUE_CENTS / 100, `The declared value cannot be more than ${env.MAX_ITEM_VALUE_CENTS / 100}: more valuable items are not allowed`)),
     contentsConfirmed: mustBeTrue("You must confirm the package contains nothing on the prohibited list"),
   }),
   trip: z.object({

@@ -1,6 +1,8 @@
 import { useEffect, useState, useContext } from "react";
 import API from "../services/api";
 import { ChatContext } from "../context/ChatContext";
+import { Link } from "react-router-dom";
+import { money } from "../services/legal";
 
 export default function MatchesForTraveler() {
   const [matches, setMatches] = useState([]);
@@ -105,8 +107,20 @@ export default function MatchesForTraveler() {
                     <strong>Dropoff:</strong> {d.dropoff || "N/A"} <br />
                     <strong>Item:</strong> {d.itemType || "N/A"} ({d.size || "N/A"})<br />
                     <strong>Weight:</strong> {d.weight || "N/A"} kg<br />
+                    {d.declaredValueCents != null && (
+                      <>
+                        <strong>Declared value:</strong> {money(d.declaredValueCents)}<br />
+                      </>
+                    )}
                     <strong>Status:</strong> {d.status || "N/A"}
                   </p>
+
+                  {d.status === "pending" && (
+                    <p className="small text-muted">
+                      You may refuse any package. Do not open it, and never carry anything on the{" "}
+                      <Link to="/prohibited-items" target="_blank">prohibited items list</Link>.
+                    </p>
+                  )}
 
                   {d.status === "pending" && (
                     <button

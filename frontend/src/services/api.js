@@ -12,4 +12,15 @@ API.interceptors.request.use((req) => {
   return req;
 });
 
+// When the server refuses an action because the current Terms have not been accepted, send the person to accept them.
+API.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 403 && err.response.data?.code === 'TERMS_REQUIRED' && window.location.pathname !== '/accept-terms') {
+      window.location.assign('/accept-terms');
+    }
+    return Promise.reject(err);
+  }
+);
+
 export default API;

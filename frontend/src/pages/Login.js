@@ -38,8 +38,9 @@ export default function Login() {
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
-      // Redirect based on role
-      if (user.role === "admin") navigate("/admin");
+      // Redirect: new terms first, then by role
+      if (!user.termsAccepted && user.role !== "admin") navigate("/accept-terms");
+      else if (user.role === "admin") navigate("/admin");
       else navigate("/dashboard");
 
     } catch (err) {
@@ -60,7 +61,7 @@ export default function Login() {
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
-      navigate("/dashboard");
+      navigate(user.termsAccepted ? "/dashboard" : "/accept-terms");
     } catch (err) {
       console.log(err);
       setErrorMsg("Google login failed.");

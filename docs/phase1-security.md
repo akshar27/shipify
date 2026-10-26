@@ -75,6 +75,27 @@ Things this does not solve, so you can decide how much they matter for the beta:
 - **No notifications.** Nobody is emailed when a delivery is accepted, delivered, disputed or paid out. Users have to look.
 - Payouts are manual and only recorded here; the app never moves money to a traveler.
 
+## Terms, prohibited items and declared value (fourth part of this branch)
+
+- **Signup requires accepting the Terms, the Privacy Policy and the prohibited-items rules.** The version and time are stored on
+  the user. People who signed up before this existed, Google sign-ups, and everyone whenever `TERMS_VERSION` changes are sent to
+  "Before you continue" before they can create or take a delivery, post a trip, send a request or pay. Finishing, confirming and
+  disputing a delivery are not gated, so nobody is stranded mid-delivery. Admins are exempt.
+- **A sender declares the item's value** (capped by `MAX_ITEM_VALUE_CENTS`, default $200) and ticks that the contents are not on
+  the prohibited list. Both are stored (`declaredValueCents`, `contentsConfirmedAt`), and travelers see the value before they accept.
+- **One source of truth:** `backend/config/legal.js` holds the prohibited list, the traveler rules and the terms version; the app
+  reads them from `GET /api/legal/rules`, so the screens cannot disagree with the server.
+- `/terms`, `/privacy` and `/prohibited-items` are public pages with footer links. **They are a draft written without a lawyer**
+  and carry a visible banner. Bracketed sections ([refund policy], [liability], [retention periods]) are deliberately left for you.
+
+**Before launch you must:** set `COMPANY_NAME` and `SUPPORT_EMAIL` (until then the pages show a red `[set COMPANY_NAME ...]`),
+have the Terms and Privacy pages reviewed and filled in, then remove the banner in `frontend/src/components/LegalPage.js`.
+Whenever you change the legal text or the list, bump `TERMS_VERSION` in `backend/config/legal.js`.
+
+Also found and fixed here: posting a trip never required ID verification or valid input, and the trip auto-match created requests
+for unpaid and own deliveries (it bypassed the payment rule and exposed unpaid senders to travelers); the signup form allowed
+6-character passwords while the server requires 8; and signup and delivery creation used blocking `alert()` popups.
+
 ## Before merging to `main` (production impact)
 
 1. **Set `CORS_ORIGINS` on the server** to the real site origin (e.g. `https://shipify.example.com`). The default is
@@ -98,7 +119,9 @@ Things this does not solve, so you can decide how much they matter for the beta:
 9. **A second migration, `handover_confirmation_payouts`** (additive: delivery columns and a `Payout` table). Deliveries that are
    already `accepted` get a handover code the first time their sender opens it. Create at least one admin
    (`ADMIN_EMAIL=you@example.com node scripts/createAdmin.js`) so someone can use the Payouts screen.
-10. The first deploy runs `npm install --production`, which now needs the new dependencies (helmet, express-rate-limit,
+10. **A third migration, `terms_and_declared_contents`** (additive). Every existing user starts with no accepted terms, so they will
+    see the accept screen on their next login. Existing deliveries have no declared value (shown as nothing).
+11. The first deploy runs `npm install --production`, which now needs the new dependencies (helmet, express-rate-limit,
    zod). That is automatic, but check the pm2 logs after deploying.
 
 ## Known gaps (not done in this phase)

@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import API from "../services/api";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { getRules, money } from "../services/legal";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   GoogleMap,
@@ -24,7 +25,15 @@ export default function CreateDelivery() {
     itemType: "",
     size: "",
     weight: "",
+    declaredValue: "",
   });
+  const [contentsConfirmed, setContentsConfirmed] = useState(false);
+  const [rules, setRules] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    getRules().then(setRules).catch(() => {});
+  }, []);
 
   const [pickupAddress, setPickupAddress] = useState("");
   const [dropoffAddress, setDropoffAddress] = useState("");
@@ -45,9 +54,11 @@ export default function CreateDelivery() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
     try {
       const payload = {
         ...form,
+        contentsConfirmed,
         pickup: pickupAddress,
         dropoff: dropoffAddress,
         pickupLat: pickupLatLng?.lat,
@@ -66,11 +77,11 @@ export default function CreateDelivery() {
         window.location.href = session.data.url;
       } catch (payErr) {
         // The delivery exists but is unpaid: it can be paid from My Deliveries.
-        alert((payErr.response?.data?.msg || "Payment could not be started") + " Your delivery was saved; you can pay for it from My Deliveries.");
-        navigate("/my-deliveries");
+        // Not an alert(): it blocks the page. Keep the message and take them to the delivery they can pay for.
+        navigate("/my-deliveries", { state: { notice: (payErr.response?.data?.msg || "Payment could not be started") + " Your delivery was saved; press Pay now when you are ready." } });
       }
     } catch (err) {
-      alert(err.response?.data?.msg || "Failed to create delivery");
+      setError(err.response?.data?.msg || "Failed to create delivery");
     }
   };
 
@@ -160,7 +171,21 @@ export default function CreateDelivery() {
           <input className="form-control" name="weight" type="number" step="0.1" placeholder="Weight (kg)" onChange={handleFormChange} required />
         </div>
 
-        <button type="submit" className="btn btn-primary w-100">Create & Pay</button>
+        <div className="mb-3">
+          <label className="form-label">Declared value{rules ? ` (up to ${money(rules.maxItemValueCents, rules.currency)})` : ""}</label>
+          <input className="form-control" name="declaredValue" type="number" min="1" step="0.01" placeholder="What the item is worth" onChange={handleFormChange} required />
+        </div>
+
+        <div className="form-check mb-3">
+          <input className="form-check-input" type="checkbox" id="contents" checked={contentsConfirmed} onChange={(e) => setContentsConfirmed(e.target.checked)} />
+          <label className="form-check-label" htmlFor="contents">
+            I confirm this package contains nothing on the <Link to="/prohibited-items" target="_blank">prohibited items list</Link> and that the
+            declared value is accurate.
+          </label>
+        </div>
+
+        {error && <div className="alert alert-danger">{error}</div>}
+        <button type="submit" className="btn btn-primary w-100" disabled={!contentsConfirmed}>Create & Pay</button>
       </form>
     </div>
   );

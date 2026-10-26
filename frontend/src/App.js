@@ -14,6 +14,10 @@ import AdminVerify from "./pages/AdminVerify";
 import Navbar from "./components/Navbar";
 import Admin from "./pages/Admin";
 import AdminPayouts from "./pages/AdminPayouts";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
+import ProhibitedItems from "./pages/ProhibitedItems";
+import AcceptTerms from "./pages/AcceptTerms";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import { jwtDecode } from "jwt-decode";
 import ProfilePage from "./pages/Profile";
@@ -38,6 +42,10 @@ function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/terms" element={<Terms />} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/prohibited-items" element={<ProhibitedItems />} />
+          <Route path="/accept-terms" element={<AcceptTerms />} />
           <Route path="/login" element={<Login />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/create-delivery" element={<CreateDelivery />} />
@@ -60,6 +68,9 @@ function App() {
           <Route path="/verify-email/:token" element={<EmailVerification />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
         </Routes>
+        <footer className="text-center small text-muted py-4">
+          <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/prohibited-items">Prohibited items</a>
+        </footer>
       </Router>
     </ChatProvider>
   );
