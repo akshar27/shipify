@@ -3,6 +3,7 @@ const { z } = require("zod");
 const prisma = require("../config/prisma");
 const verifyToken = require("../middleware/auth");
 const ensureVerified = require("../middleware/ensureVerified");
+const requireTerms = require("../middleware/requireTerms");
 const env = require("../config/env");
 const { getStripe } = require("../utils/stripe");
 
@@ -14,7 +15,7 @@ const CHECKOUT_REUSE_MS = 20 * 60 * 1000; // a Checkout session stays open for 2
 /* ------------------------------------------------------------------------------------------------
    Start a payment. The browser says only WHICH delivery; the amount, currency and payer come from the server.
 ------------------------------------------------------------------------------------------------ */
-router.post("/create-checkout-session", verifyToken, ensureVerified, async (req, res, next) => {
+router.post("/create-checkout-session", verifyToken, ensureVerified, requireTerms, async (req, res, next) => {
   const stripe = getStripe();
   if (!stripe) return res.status(503).json(NOT_CONFIGURED);
 

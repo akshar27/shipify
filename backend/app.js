@@ -35,6 +35,7 @@ app.use('/api/verification', require('./routes/verificationRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/admin', require('./routes/adminPayoutRoutes'));
 app.use('/api/documents', require('./routes/documentRoutes'));
+app.use('/api/legal', require('./routes/legalRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));

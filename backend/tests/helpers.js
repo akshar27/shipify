@@ -24,16 +24,21 @@ if (!/test/i.test(dbName)) {
 const request = require("supertest");
 const bcrypt = require("bcryptjs");
 const prisma = require("../config/prisma");
+// config/legal loads (and caches) the environment, so it must not be required until each test file has set its own env vars.
+const termsVersion = () => require("../config/legal").TERMS_VERSION;
 
 const PASSWORD = "Correct-horse-1";
 let counter = 0;
 const uniqueEmail = (label = "u") => `${label}.${process.pid}.${Date.now()}.${counter++}@shipify-test.local`;
 
 /** Creates a verified user directly in the DB (the signup/verify flow itself is covered in auth.test.js). */
-async function createUser({ role = "user", verified = true, label } = {}) {
+async function createUser({ role = "user", verified = true, label, terms = true } = {}) {
   const email = uniqueEmail(label || role);
   const user = await prisma.user.create({
-    data: { name: `Test ${role}`, email, password: await bcrypt.hash(PASSWORD, 4), role, emailVerified: verified },
+    data: {
+      name: `Test ${role}`, email, password: await bcrypt.hash(PASSWORD, 4), role, emailVerified: verified,
+      ...(terms ? { termsVersion: termsVersion(), termsAcceptedAt: new Date() } : {}),
+    },
   });
   return { ...user, plainPassword: PASSWORD };
 }
@@ -69,4 +74,4 @@ async function cleanup() {
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
 const FAKE_PNG = Buffer.from("MZ\x90\x00 this is not an image");
 
-module.exports = { request, prisma, createUser, loginToken, cleanup, uniqueEmail, PASSWORD, PNG, FAKE_PNG };
+module.exports = { termsVersion, request, prisma, createUser, loginToken, cleanup, uniqueEmail, PASSWORD, PNG, FAKE_PNG };

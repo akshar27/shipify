@@ -10,7 +10,7 @@ after(h.cleanup);
 test("signup -> verify email -> login works, and the role is always 'user'", async () => {
   const email = uniqueEmail("signup");
   // role: "admin" in the body must be ignored
-  const reg = await request(app).post("/api/auth/register").send({ name: "New Person", email, password: PASSWORD, role: "admin" });
+  const reg = await request(app).post("/api/auth/register").send({ name: "New Person", email, password: PASSWORD, role: "admin", acceptTerms: true });
   assert.equal(reg.status, 201);
 
   const row = await prisma.user.findUnique({ where: { email } });
@@ -30,7 +30,7 @@ test("signup -> verify email -> login works, and the role is always 'user'", asy
 
 test("a registered 'admin' hint cannot reach admin endpoints", async () => {
   const email = uniqueEmail("mallory");
-  await request(app).post("/api/auth/register").send({ name: "Mallory", email, password: PASSWORD, role: "admin" });
+  await request(app).post("/api/auth/register").send({ name: "Mallory", email, password: PASSWORD, role: "admin", acceptTerms: true });
   await prisma.user.update({ where: { email }, data: { emailVerified: true } });
   const token = await loginToken(app, { email, plainPassword: PASSWORD });
   const res = await request(app).get("/api/admin/all-users").set("Authorization", `Bearer ${token}`);
@@ -40,17 +40,17 @@ test("a registered 'admin' hint cannot reach admin endpoints", async () => {
 test("login and register responses never contain the password hash or tokens", async () => {
   const user = await createUser();
   const res = await request(app).post("/api/auth/login").send({ email: user.email, password: user.plainPassword });
-  assert.deepEqual(Object.keys(res.body.user).sort(), ["email", "emailVerified", "id", "isVerified", "name", "profilePicture", "role"]);
+  assert.deepEqual(Object.keys(res.body.user).sort(), ["email", "emailVerified", "id", "isVerified", "name", "profilePicture", "role", "termsAccepted"]);
   assert.ok(!JSON.stringify(res.body).includes("$2"), "a bcrypt hash leaked");
 });
 
 test("input validation: bad email, short password, missing fields, wrong types", async () => {
   const bad = [
-    { name: "A", email: "not-an-email", password: PASSWORD },
-    { name: "A", email: uniqueEmail(), password: "short" },
-    { name: "A", email: uniqueEmail(), password: "x".repeat(73) },
-    { email: uniqueEmail(), password: PASSWORD },
-    { name: "A", email: { $ne: null }, password: PASSWORD },
+    { name: "A", email: "not-an-email", password: PASSWORD, acceptTerms: true },
+    { name: "A", email: uniqueEmail(), password: "short", acceptTerms: true },
+    { name: "A", email: uniqueEmail(), password: "x".repeat(73), acceptTerms: true },
+    { email: uniqueEmail(), password: PASSWORD, acceptTerms: true },
+    { name: "A", email: { $ne: null }, password: PASSWORD, acceptTerms: true },
   ];
   for (const body of bad) {
     const res = await request(app).post("/api/auth/register").send(body);
@@ -60,7 +60,7 @@ test("input validation: bad email, short password, missing fields, wrong types",
 
 test("duplicate email is rejected", async () => {
   const user = await createUser();
-  const res = await request(app).post("/api/auth/register").send({ name: "Dup", email: user.email, password: PASSWORD });
+  const res = await request(app).post("/api/auth/register").send({ name: "Dup", email: user.email, password: PASSWORD, acceptTerms: true });
   assert.equal(res.status, 400);
 });
 

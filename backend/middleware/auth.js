@@ -19,9 +19,9 @@ module.exports = async function (req, res, next) {
   if (!decoded.id) return res.status(401).json({ msg: "Token is not valid" });
 
   try {
-    const user = await prisma.user.findUnique({ where: { id: decoded.id }, select: { id: true, role: true } });
+    const user = await prisma.user.findUnique({ where: { id: decoded.id }, select: { id: true, role: true, termsVersion: true } });
     if (!user) return res.status(401).json({ msg: "Account no longer exists" });
-    req.user = { id: user.id, role: user.role };
+    req.user = { id: user.id, role: user.role, termsVersion: user.termsVersion };
     next();
   } catch (err) {
     next(err);

@@ -36,6 +36,11 @@ model User {
   emailToken    String?
   emailVerified Boolean @default(false)
 
+  // Which version of the Terms (and prohibited-items rules) this user agreed to, and when. Bumping TERMS_VERSION in
+  // config/legal.js makes everyone accept again before they can create or take a delivery.
+  termsVersion    String?
+  termsAcceptedAt DateTime?
+
   givenRatings    Rating[] @relation("GivenRatings")
   receivedRatings Rating[] @relation("ReceivedRatings")
 
@@ -46,39 +51,42 @@ model User {
 }
 
 model Delivery {
-  id               String            @id @default(uuid())
-  senderId         String
-  sender           User              @relation("SentDeliveries", fields: [senderId], references: [id])
+  id                  String            @id @default(uuid())
+  senderId            String
+  sender              User              @relation("SentDeliveries", fields: [senderId], references: [id])
   // The traveler who accepted the job. Null until someone does; only this user may complete the delivery.
-  travelerId       String?
-  traveler         User?             @relation("CarriedDeliveries", fields: [travelerId], references: [id])
-  pickup           String
-  dropoff          String
-  pickupLat        Float?
-  pickupLng        Float?
-  dropoffLat       Float?
-  dropoffLng       Float?
-  itemType         String
-  size             String
-  weight           Float
-  status           String            @default("pending")
+  travelerId          String?
+  traveler            User?             @relation("CarriedDeliveries", fields: [travelerId], references: [id])
+  pickup              String
+  dropoff             String
+  pickupLat           Float?
+  pickupLng           Float?
+  dropoffLat          Float?
+  dropoffLng          Float?
+  itemType            String
+  size                String
+  weight              Float
+  // What the sender declared: a value under the platform cap, and that the contents are not on the prohibited list.
+  declaredValueCents  Int?
+  contentsConfirmedAt DateTime?
+  status              String            @default("pending")
   // unpaid | paid | refunded. Set only by the Stripe webhook, never by a browser redirect. Travelers only ever see paid deliveries.
-  paymentStatus    String            @default("unpaid")
-  createdAt        DateTime          @default(now())
+  paymentStatus       String            @default("unpaid")
+  createdAt           DateTime          @default(now())
   // Handover: the sender shows a 6-digit code (derived from this salt, never stored) to the recipient, who gives it to the
   // traveler at drop-off. Entering it marks the delivery delivered. Wrong guesses are counted and locked at 5.
-  handoverSalt     String?
-  handoverAttempts Int               @default(0)
-  deliveredAt      DateTime?
-  confirmedAt      DateTime?
-  disputeReason    String?
-  disputedAt       DateTime?
-  resolutionNote   String?
-  payout           Payout?
-  payments         Payment[]
-  requests         DeliveryRequest[] @relation("DeliveryRequests")
-  ratings          Rating[]
-  messages         Message[]
+  handoverSalt        String?
+  handoverAttempts    Int               @default(0)
+  deliveredAt         DateTime?
+  confirmedAt         DateTime?
+  disputeReason       String?
+  disputedAt          DateTime?
+  resolutionNote      String?
+  payout              Payout?
+  payments            Payment[]
+  requests            DeliveryRequest[] @relation("DeliveryRequests")
+  ratings             Rating[]
+  messages            Message[]
 }
 
 model Trip {

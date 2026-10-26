@@ -4,11 +4,12 @@ const router = express.Router();
 const prisma = require('../config/prisma');
 const verifyToken = require('../middleware/auth');
 const ensureVerified = require('../middleware/ensureVerified');
+const requireTerms = require('../middleware/requireTerms');
 const { claimDelivery } = require('../utils/deliveryState');
 const { publicDelivery } = require('../utils/handover');
 
 // The sender asks a specific traveler to carry a (paid) delivery. The sender is always the caller.
-router.post('/', verifyToken, ensureVerified, async (req, res, next) => {
+router.post('/', verifyToken, ensureVerified, requireTerms, async (req, res, next) => {
   const parsed = z.object({ deliveryId: z.string().uuid(), travelerId: z.string().uuid() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ msg: 'deliveryId and travelerId are required' });
   const { deliveryId, travelerId } = parsed.data;
@@ -36,7 +37,7 @@ router.post('/', verifyToken, ensureVerified, async (req, res, next) => {
 });
 
 // The requested traveler accepts. Claiming the delivery and updating the requests happen in one transaction.
-router.patch('/:id/accept', verifyToken, ensureVerified, async (req, res, next) => {
+router.patch('/:id/accept', verifyToken, ensureVerified, requireTerms, async (req, res, next) => {
   if (!z.string().uuid().safeParse(req.params.id).success) return res.status(404).json({ msg: 'Request not found' });
 
   try {

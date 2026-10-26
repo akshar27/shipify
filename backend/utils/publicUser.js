@@ -1,3 +1,5 @@
+const { TERMS_VERSION } = require("../config/legal");
+
 // The only user fields that ever go to a browser. The full row also holds the password hash and the email/reset tokens.
 exports.publicUser = (u) => ({
   id: u.id,
@@ -7,4 +9,5 @@ exports.publicUser = (u) => ({
   isVerified: u.isVerified,
   emailVerified: u.emailVerified,
   profilePicture: u.profilePicture,
+  termsAccepted: u.termsVersion === TERMS_VERSION,
 });

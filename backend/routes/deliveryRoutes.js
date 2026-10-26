@@ -3,6 +3,7 @@ const router = express.Router();
 const verifyToken = require('../middleware/auth');
 const prisma = require('../config/prisma');
 const ensureVerified = require('../middleware/ensureVerified');
+const requireTerms = require('../middleware/requireTerms');
 const { haversineDistance } = require('../utils/geo');
 const { validate, schemas } = require('../middleware/validate');
 const { claimDelivery } = require('../utils/deliveryState');
@@ -10,8 +11,8 @@ const { newSalt, codeFor, codesMatch, publicDelivery, MAX_ATTEMPTS } = require('
 const { confirmCutoff } = require('../utils/payouts');
 
 // Create delivery
-router.post('/', verifyToken, ensureVerified, validate(schemas.delivery), async (req, res) => {
-  const { pickup, dropoff, pickupLat, pickupLng, dropoffLat, dropoffLng, itemType, size, weight } = req.body;
+router.post('/', verifyToken, ensureVerified, requireTerms, validate(schemas.delivery), async (req, res) => {
+  const { pickup, dropoff, pickupLat, pickupLng, dropoffLat, dropoffLng, itemType, size, weight, declaredValue } = req.body;
   try {
     const delivery = await prisma.delivery.create({
       data: {
@@ -24,7 +25,9 @@ router.post('/', verifyToken, ensureVerified, validate(schemas.delivery), async 
         dropoffLng,
         itemType,
         size,
-        weight
+        weight,
+        declaredValueCents: Math.round(declaredValue * 100),
+        contentsConfirmedAt: new Date(), // the sender ticked the prohibited-items declaration (validated as true)
       },
     });
     res.status(201).json(publicDelivery(delivery));
@@ -124,7 +127,7 @@ const validId = (req) => schemas.id.safeParse(req.params).success;
 const CARRYING = ['accepted', 'in-transit'];
 
 // A traveler takes a paid, unclaimed delivery. The claim is one conditional UPDATE, so two travelers cannot both get it.
-router.patch('/:id/accept', verifyToken, ensureVerified, async (req, res, next) => {
+router.patch('/:id/accept', verifyToken, ensureVerified, requireTerms, async (req, res, next) => {
   if (!validId(req)) return notFound(res);
   const { id } = req.params;
 

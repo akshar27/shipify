@@ -1,10 +1,14 @@
 const { z } = require("zod");
+const env = require("../config/env");
 
 // bcrypt only uses the first 72 bytes of a password, so longer ones are rejected instead of silently truncated.
 const password = z.string().min(8, "Password must be at least 8 characters").max(72, "Password is too long");
 const email = z.string().trim().toLowerCase().email("Enter a valid email").max(254);
 
 // Optional coordinates arrive as numbers or numeric strings, or not at all (the user typed an address without picking a suggestion).
+// Must be exactly `true` (a missing or false value gets the given message, not a type error).
+const mustBeTrue = (message) => z.any().refine((v) => v === true, { message });
+
 const coord = (min, max) => z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().min(min).max(max).optional());
 
 exports.schemas = {
@@ -18,6 +22,18 @@ exports.schemas = {
     itemType: z.string().trim().min(1).max(100),
     size: z.string().trim().min(1).max(100),
     weight: z.coerce.number().positive().max(1000),
+    // What the sender says the item is worth (in the platform currency's major unit) and that it is not on the prohibited list.
+    declaredValue: z.coerce.number().positive("Enter the item's value").max(env.MAX_ITEM_VALUE_CENTS / 100, `The declared value cannot be more than ${env.MAX_ITEM_VALUE_CENTS / 100}: more valuable items are not allowed`),
+    contentsConfirmed: mustBeTrue("You must confirm the package contains nothing on the prohibited list"),
+  }),
+  trip: z.object({
+    start: z.string().trim().min(1).max(300),
+    end: z.string().trim().min(1).max(300),
+    departure: z.coerce.date(),
+    startLat: coord(-90, 90),
+    startLng: coord(-180, 180),
+    endLat: coord(-90, 90),
+    endLng: coord(-180, 180),
   }),
   id: z.object({ id: z.string().uuid() }),
   complete: z.object({ code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code").optional() }),
@@ -28,7 +44,9 @@ exports.schemas = {
     name: z.string().trim().min(1, "Name is required").max(100),
     email,
     password,
-  }), // a client-supplied role is ignored on purpose: accounts are always created as plain users
+    acceptTerms: mustBeTrue("You must accept the Terms and the prohibited-items rules"),
+  }),
+  acceptTerms: z.object({ accept: mustBeTrue("You must accept the Terms and the prohibited-items rules") }), // a client-supplied role is ignored on purpose: accounts are always created as plain users
   login: z.object({ email, password: z.string().min(1).max(72) }),
   forgotPassword: z.object({ email }),
   resetPassword: z.object({ token: z.string().min(10).max(200), password }),

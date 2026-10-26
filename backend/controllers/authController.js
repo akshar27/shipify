@@ -5,6 +5,7 @@ const prisma = require('../config/prisma');
 const crypto = require('crypto');
 const { sendMail } = require('../utils/mailer');
 const { publicUser } = require('../utils/publicUser');
+const { TERMS_VERSION } = require('../config/legal');
 
 const { OAuth2Client } = require("google-auth-library");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -39,6 +40,8 @@ exports.registerUser = async (req, res) => {
         password: hashedPassword,
         role: 'user', // never taken from the request: anyone could otherwise register as an admin
         emailToken,
+        termsVersion: TERMS_VERSION, // signup is rejected unless acceptTerms was true (see validate.js)
+        termsAcceptedAt: new Date(),
       }
     });
 
@@ -242,3 +245,14 @@ exports.googleLogin = async (req, res) => {
   }
 };
 
+
+// ---------------- ACCEPT TERMS -----------------
+// For people who signed up before the terms existed, signed in with Google, or when the terms version changes.
+exports.acceptTerms = async (req, res, next) => {
+  try {
+    await prisma.user.update({ where: { id: req.user.id }, data: { termsVersion: TERMS_VERSION, termsAcceptedAt: new Date() } });
+    res.json({ msg: 'Thanks, you are all set.', termsVersion: TERMS_VERSION });
+  } catch (err) {
+    next(err);
+  }
+};

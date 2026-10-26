@@ -22,6 +22,11 @@ const schema = z.object({
   AUTO_CONFIRM_HOURS: z.coerce.number().min(0).default(72),
   // The platform's cut of DELIVERY_FEE_CENTS; the rest is what the traveler is owed.
   PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(20),
+  // The most a sender may declare an item to be worth; higher-value items are prohibited.
+  MAX_ITEM_VALUE_CENTS: z.coerce.number().int().min(100).default(20000),
+  // Shown on the Terms and Privacy pages. Set both before launch.
+  COMPANY_NAME: z.string().optional(),
+  SUPPORT_EMAIL: z.string().email().optional(),
   GLOBAL_RATE_LIMIT: z.coerce.number().int().min(1).default(600),
   AUTH_RATE_LIMIT: z.coerce.number().int().min(1).default(20),
 });

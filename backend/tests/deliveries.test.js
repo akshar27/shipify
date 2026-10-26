@@ -23,20 +23,21 @@ const statusOf = async (id) => (await prisma.delivery.findUnique({ where: { id }
 // ------------------------------------------------------------------------------------------------ creating
 test("creating a delivery: the sender is the caller, it starts pending and unpaid, bad input is rejected", async () => {
   const sender = await verifiedUser();
-  const ok = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ pickup: "SF", dropoff: "LA", itemType: "laptop", size: "medium", weight: "2.5", pickupLat: "37.77", pickupLng: "-122.4" });
+  const ok = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ pickup: "SF", dropoff: "LA", itemType: "laptop", size: "medium", weight: "2.5", declaredValue: "150", contentsConfirmed: true, pickupLat: "37.77", pickupLng: "-122.4" });
   assert.equal(ok.status, 201);
   assert.equal(ok.body.senderId, sender.id);
   assert.equal(ok.body.status, "pending");
   assert.equal(ok.body.paymentStatus, "unpaid");
   assert.equal(ok.body.weight, 2.5);
 
-  const injected = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ pickup: "SF", dropoff: "LA", itemType: "x", size: "s", weight: 1, paymentStatus: "paid", status: "delivered", senderId: "someone-else" });
+  const injected = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ pickup: "SF", dropoff: "LA", itemType: "x", size: "s", weight: 1, declaredValue: 20, contentsConfirmed: true, paymentStatus: "paid", status: "delivered", senderId: "someone-else" });
   assert.equal(injected.status, 201);
   assert.equal(injected.body.paymentStatus, "unpaid", "a client must not be able to create a delivery as already paid");
   assert.equal(injected.body.status, "pending");
   assert.equal(injected.body.senderId, sender.id);
 
-  for (const bad of [{ pickup: "", dropoff: "B", itemType: "x", size: "s", weight: 1 }, { pickup: "A", dropoff: "B", itemType: "x", size: "s", weight: -3 }, { pickup: "A", dropoff: "B", itemType: "x", size: "s", weight: "abc" }, { pickup: "A", dropoff: "B", itemType: "x", size: "s", weight: 1, pickupLat: 999 }]) {
+  const base = { pickup: "A", dropoff: "B", itemType: "x", size: "s", weight: 1, declaredValue: 20, contentsConfirmed: true };
+  for (const bad of [{ ...base, pickup: "" }, { ...base, weight: -3 }, { ...base, weight: "abc" }, { ...base, pickupLat: 999 }]) {
     assert.equal((await request(app).post("/api/deliveries").set(auth(sender.token)).send(bad)).status, 400, JSON.stringify(bad));
   }
 });

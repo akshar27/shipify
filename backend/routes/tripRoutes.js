@@ -3,8 +3,12 @@ const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
 const verifyToken = require('../middleware/auth');
+const ensureVerified = require('../middleware/ensureVerified');
+const requireTerms = require('../middleware/requireTerms');
+const { validate, schemas } = require('../middleware/validate');
 
-router.post('/', verifyToken, async (req, res) => {
+// Posting a trip makes someone a traveler, so they must be ID-verified and have accepted the current rules.
+router.post('/', verifyToken, ensureVerified, requireTerms, validate(schemas.trip), async (req, res) => {
   const {
     start,
     end,
@@ -21,11 +25,11 @@ router.post('/', verifyToken, async (req, res) => {
         travelerId: req.user.id,
         start,
         end,
-        startLat: parseFloat(startLat),
-        startLng: parseFloat(startLng),
-        endLat: parseFloat(endLat),
-        endLng: parseFloat(endLng),
-        departure: new Date(departure),
+        startLat,
+        startLng,
+        endLat,
+        endLng,
+        departure,
       },
     });
 
@@ -34,8 +38,12 @@ router.post('/', verifyToken, async (req, res) => {
       where: {
         pickup: start,
         dropoff: end,
+        // Only deliveries a traveler may actually take: paid, unclaimed, and not the traveler's own.
         status: 'pending',
-        createdAt: { lte: new Date(departure) },
+        paymentStatus: 'paid',
+        travelerId: null,
+        senderId: { not: req.user.id },
+        createdAt: { lte: departure },
       },
     });
 
@@ -60,7 +68,7 @@ router.post('/', verifyToken, async (req, res) => {
     res.status(201).json(trip);
   } catch (err) {
     console.error("Trip creation failed:", err);
-    res.status(500).json({ msg: 'Error creating trip', error: err.message });
+    res.status(500).json({ msg: 'Error creating trip' });
   }
 });
 
