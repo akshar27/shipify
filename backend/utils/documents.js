@@ -10,7 +10,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const AWS = require("aws-sdk");
 
-const PRIVATE_DIR = path.join(__dirname, "..", "private-uploads");
+const PRIVATE_DIR = process.env.PRIVATE_UPLOAD_DIR || path.join(__dirname, "..", "private-uploads");
 const REF_PREFIX = "doc:";
 const URL_TTL_SECONDS = 300;
 

@@ -11,6 +11,9 @@ const schema = z.object({
   CORS_ORIGINS: z.string().default("http://localhost:3000"),
   // Number of reverse proxies in front of the app (nginx etc.), so rate limiting sees real client IPs. 0 = none.
   TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // Requests per 15 minutes per IP: everything, and the login/register/reset endpoints specifically.
+  GLOBAL_RATE_LIMIT: z.coerce.number().int().min(1).default(600),
+  AUTH_RATE_LIMIT: z.coerce.number().int().min(1).default(20),
 });
 
 const parsed = schema.safeParse(process.env);
