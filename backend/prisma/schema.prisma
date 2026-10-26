@@ -22,6 +22,8 @@ model User {
   deliveries        Delivery[]        @relation("SentDeliveries")
   carriedDeliveries Delivery[]        @relation("CarriedDeliveries")
   payments          Payment[]
+  payoutsReceived   Payout[]          @relation("PayoutsReceived")
+  payoutsMade       Payout[]          @relation("PayoutsMade")
   trips             Trip[]
   deliveryRequests  DeliveryRequest[] @relation("UserRequests")
 
@@ -44,29 +46,39 @@ model User {
 }
 
 model Delivery {
-  id            String            @id @default(uuid())
-  senderId      String
-  sender        User              @relation("SentDeliveries", fields: [senderId], references: [id])
+  id               String            @id @default(uuid())
+  senderId         String
+  sender           User              @relation("SentDeliveries", fields: [senderId], references: [id])
   // The traveler who accepted the job. Null until someone does; only this user may complete the delivery.
-  travelerId    String?
-  traveler      User?             @relation("CarriedDeliveries", fields: [travelerId], references: [id])
-  pickup        String
-  dropoff       String
-  pickupLat     Float?
-  pickupLng     Float?
-  dropoffLat    Float?
-  dropoffLng    Float?
-  itemType      String
-  size          String
-  weight        Float
-  status        String            @default("pending")
+  travelerId       String?
+  traveler         User?             @relation("CarriedDeliveries", fields: [travelerId], references: [id])
+  pickup           String
+  dropoff          String
+  pickupLat        Float?
+  pickupLng        Float?
+  dropoffLat       Float?
+  dropoffLng       Float?
+  itemType         String
+  size             String
+  weight           Float
+  status           String            @default("pending")
   // unpaid | paid | refunded. Set only by the Stripe webhook, never by a browser redirect. Travelers only ever see paid deliveries.
-  paymentStatus String            @default("unpaid")
-  createdAt     DateTime          @default(now())
-  payments      Payment[]
-  requests      DeliveryRequest[] @relation("DeliveryRequests")
-  ratings       Rating[]
-  messages      Message[]
+  paymentStatus    String            @default("unpaid")
+  createdAt        DateTime          @default(now())
+  // Handover: the sender shows a 6-digit code (derived from this salt, never stored) to the recipient, who gives it to the
+  // traveler at drop-off. Entering it marks the delivery delivered. Wrong guesses are counted and locked at 5.
+  handoverSalt     String?
+  handoverAttempts Int               @default(0)
+  deliveredAt      DateTime?
+  confirmedAt      DateTime?
+  disputeReason    String?
+  disputedAt       DateTime?
+  resolutionNote   String?
+  payout           Payout?
+  payments         Payment[]
+  requests         DeliveryRequest[] @relation("DeliveryRequests")
+  ratings          Rating[]
+  messages         Message[]
 }
 
 model Trip {
@@ -158,4 +170,22 @@ model StripeEvent {
   id         String   @id
   type       String
   receivedAt DateTime @default(now())
+}
+
+// Manual payouts for the MVP: an admin pays the traveler outside the app (bank transfer etc.) and records it here.
+// The unique deliveryId means a delivery can be paid out once, even if two admins click at the same time.
+model Payout {
+  id         String   @id @default(uuid())
+  deliveryId String   @unique
+  delivery   Delivery @relation(fields: [deliveryId], references: [id])
+  travelerId String
+  traveler   User     @relation("PayoutsReceived", fields: [travelerId], references: [id])
+  grossCents Int
+  feeCents   Int
+  netCents   Int
+  currency   String
+  reference  String
+  paidById   String
+  paidBy     User     @relation("PayoutsMade", fields: [paidById], references: [id])
+  createdAt  DateTime @default(now())
 }

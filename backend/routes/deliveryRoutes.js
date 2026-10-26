@@ -6,6 +6,8 @@ const ensureVerified = require('../middleware/ensureVerified');
 const { haversineDistance } = require('../utils/geo');
 const { validate, schemas } = require('../middleware/validate');
 const { claimDelivery } = require('../utils/deliveryState');
+const { newSalt, codeFor, codesMatch, publicDelivery, MAX_ATTEMPTS } = require('../utils/handover');
+const { confirmCutoff } = require('../utils/payouts');
 
 // Create delivery
 router.post('/', verifyToken, ensureVerified, validate(schemas.delivery), async (req, res) => {
@@ -25,7 +27,7 @@ router.post('/', verifyToken, ensureVerified, validate(schemas.delivery), async 
         weight
       },
     });
-    res.status(201).json(delivery);
+    res.status(201).json(publicDelivery(delivery));
   } catch (err) {
     console.error("Delivery creation error:", err);
     res.status(500).json({ msg: 'Failed to create delivery' });
@@ -48,9 +50,9 @@ router.get('/mine', verifyToken, async (req, res) => {
       },
     });
 
-    res.json(deliveries);
+    res.json(deliveries.map(publicDelivery));
   } catch (err) {
-    res.status(500).json({ msg: 'Failed to fetch deliveries', error: err.message });
+    res.status(500).json({ msg: 'Failed to fetch deliveries' });
   }
 });
 
@@ -117,32 +119,13 @@ router.get('/mine', verifyToken, async (req, res) => {
 //   }
 // });
 
-// The assigned traveler marks the package delivered. Nobody else can (an admin may, to fix a stuck job).
-router.patch('/:id/complete', verifyToken, ensureVerified, async (req, res, next) => {
-  if (!schemas.id.safeParse(req.params).success) return res.status(404).json({ msg: 'Delivery not found' });
-  const { id } = req.params;
-
-  try {
-    const { count } = await prisma.delivery.updateMany({
-      where: {
-        id,
-        status: { in: ['accepted', 'in-transit'] },
-        ...(req.user.role === 'admin' ? {} : { travelerId: req.user.id }),
-      },
-      data: { status: 'delivered' },
-    });
-    if (count !== 1) return res.status(409).json({ msg: 'This delivery cannot be completed by you right now' });
-
-    const delivery = await prisma.delivery.findUnique({ where: { id } });
-    res.json({ msg: 'Delivery marked as complete', delivery });
-  } catch (err) {
-    next(err);
-  }
-});
+const notFound = (res) => res.status(404).json({ msg: 'Delivery not found' });
+const validId = (req) => schemas.id.safeParse(req.params).success;
+const CARRYING = ['accepted', 'in-transit'];
 
 // A traveler takes a paid, unclaimed delivery. The claim is one conditional UPDATE, so two travelers cannot both get it.
 router.patch('/:id/accept', verifyToken, ensureVerified, async (req, res, next) => {
-  if (!schemas.id.safeParse(req.params).success) return res.status(404).json({ msg: 'Delivery not found' });
+  if (!validId(req)) return notFound(res);
   const { id } = req.params;
 
   try {
@@ -150,7 +133,97 @@ router.patch('/:id/accept', verifyToken, ensureVerified, async (req, res, next) 
     if (!claimed) return res.status(409).json({ msg: 'This delivery is not available' });
 
     const delivery = await prisma.delivery.findUnique({ where: { id } });
-    res.json({ msg: 'Delivery accepted by traveler', delivery });
+    res.json({ msg: 'Delivery accepted by traveler', delivery: publicDelivery(delivery) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The sender looks up the handover code to give to the recipient. Nobody else can: not the traveler, who has to get it from the recipient.
+router.get('/:id/handover-code', verifyToken, async (req, res, next) => {
+  if (!validId(req)) return notFound(res);
+  const { id } = req.params;
+
+  try {
+    let delivery = await prisma.delivery.findFirst({ where: { id, senderId: req.user.id, paymentStatus: 'paid', status: { in: CARRYING } } });
+    if (!delivery) return notFound(res);
+    if (!delivery.handoverSalt) {
+      // A delivery accepted before handover codes existed: issue its salt now (only if still missing, so two requests agree).
+      await prisma.delivery.updateMany({ where: { id, handoverSalt: null }, data: { handoverSalt: newSalt() } });
+      delivery = await prisma.delivery.findUnique({ where: { id } });
+    }
+    res.json({ code: codeFor(id, delivery.handoverSalt) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The assigned traveler marks the package delivered by entering the code the recipient gives them. (An admin can complete one
+// without a code, to fix a stuck job.) Wrong codes are counted atomically and lock the delivery at MAX_ATTEMPTS.
+router.patch('/:id/complete', verifyToken, ensureVerified, validate(schemas.complete), async (req, res, next) => {
+  if (!validId(req)) return notFound(res);
+  const { id } = req.params;
+  const isAdmin = req.user.role === 'admin';
+
+  try {
+    const delivery = await prisma.delivery.findFirst({
+      where: { id, status: { in: CARRYING }, ...(isAdmin ? {} : { travelerId: req.user.id }) },
+    });
+    if (!delivery) return res.status(409).json({ msg: 'This delivery cannot be completed by you right now' });
+
+    if (!isAdmin) {
+      if (!req.body.code) return res.status(400).json({ msg: 'Enter the 6-digit code from the recipient' });
+      if (!delivery.handoverSalt) return res.status(409).json({ msg: 'No code has been issued yet: ask the sender to open their code first' });
+
+      // Count the attempt before looking at the code, in one conditional UPDATE, so parallel guesses cannot exceed the limit.
+      const counted = await prisma.delivery.updateMany({ where: { id, handoverAttempts: { lt: MAX_ATTEMPTS } }, data: { handoverAttempts: { increment: 1 } } });
+      if (counted.count !== 1) return res.status(423).json({ msg: 'Too many wrong codes. This delivery is locked: contact support.' });
+
+      if (!codesMatch(req.body.code, codeFor(id, delivery.handoverSalt))) {
+        const left = MAX_ATTEMPTS - (delivery.handoverAttempts + 1);
+        return res.status(400).json({ msg: left > 0 ? `Wrong code. ${left} attempt${left === 1 ? '' : 's'} left.` : 'Wrong code. This delivery is now locked: contact support.' });
+      }
+    }
+
+    const { count } = await prisma.delivery.updateMany({ where: { id, status: { in: CARRYING } }, data: { status: 'delivered', deliveredAt: new Date() } });
+    if (count !== 1) return res.status(409).json({ msg: 'This delivery cannot be completed right now' });
+
+    res.json({ msg: 'Delivery marked as complete', delivery: publicDelivery(await prisma.delivery.findUnique({ where: { id } })) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The sender confirms they (or the recipient) got the package. This is what makes the traveler's payout due.
+router.post('/:id/confirm', verifyToken, async (req, res, next) => {
+  if (!validId(req)) return notFound(res);
+  try {
+    const { count } = await prisma.delivery.updateMany({
+      where: { id: req.params.id, senderId: req.user.id, status: 'delivered' },
+      data: { status: 'confirmed', confirmedAt: new Date() },
+    });
+    if (count !== 1) return res.status(409).json({ msg: 'This delivery cannot be confirmed' });
+    res.json({ msg: 'Delivery confirmed', delivery: publicDelivery(await prisma.delivery.findUnique({ where: { id: req.params.id } })) });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// The sender reports a problem: before delivery (it never arrived) or within the confirm window after it. Freezes the payout until an admin decides.
+router.post('/:id/dispute', verifyToken, validate(schemas.dispute), async (req, res, next) => {
+  if (!validId(req)) return notFound(res);
+  try {
+    const { count } = await prisma.delivery.updateMany({
+      where: {
+        id: req.params.id,
+        senderId: req.user.id,
+        paymentStatus: 'paid',
+        OR: [{ status: { in: CARRYING } }, { status: 'delivered', deliveredAt: { gt: confirmCutoff() } }],
+      },
+      data: { status: 'disputed', disputeReason: req.body.reason, disputedAt: new Date() },
+    });
+    if (count !== 1) return res.status(409).json({ msg: 'This delivery cannot be disputed (the window may have closed)' });
+    res.json({ msg: 'Thanks, an admin will look into it', delivery: publicDelivery(await prisma.delivery.findUnique({ where: { id: req.params.id } })) });
   } catch (err) {
     next(err);
   }

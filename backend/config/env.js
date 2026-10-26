@@ -18,6 +18,10 @@ const schema = z.object({
   // What a sender pays per delivery, in cents. Decided here, never by the browser.
   DELIVERY_FEE_CENTS: z.coerce.number().int().min(50).max(100000).default(1000),
   PAYMENT_CURRENCY: z.string().length(3).toLowerCase().default("usd"),
+  // After a delivery is marked delivered, the sender has this long to confirm or report a problem; after it, the delivery counts as confirmed.
+  AUTO_CONFIRM_HOURS: z.coerce.number().min(0).default(72),
+  // The platform's cut of DELIVERY_FEE_CENTS; the rest is what the traveler is owed.
+  PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(20),
   GLOBAL_RATE_LIMIT: z.coerce.number().int().min(1).default(600),
   AUTH_RATE_LIMIT: z.coerce.number().int().min(1).default(20),
 });

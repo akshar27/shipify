@@ -33,6 +33,7 @@ app.use('/api/match', require('./routes/matchRoutes'));
 app.use('/api/request', require('./routes/requestRoutes'));
 app.use('/api/verification', require('./routes/verificationRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/admin', require('./routes/adminPayoutRoutes'));
 app.use('/api/documents', require('./routes/documentRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));

@@ -5,6 +5,7 @@ const prisma = require('../config/prisma');
 const verifyToken = require('../middleware/auth');
 const ensureVerified = require('../middleware/ensureVerified');
 const { claimDelivery } = require('../utils/deliveryState');
+const { publicDelivery } = require('../utils/handover');
 
 // The sender asks a specific traveler to carry a (paid) delivery. The sender is always the caller.
 router.post('/', verifyToken, ensureVerified, async (req, res, next) => {
@@ -67,7 +68,7 @@ router.get('/mine', verifyToken, async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
     });
 
-    res.json(requests);
+    res.json(requests.map((r) => ({ ...r, delivery: publicDelivery(r.delivery) })));
   } catch (err) {
     next(err);
   }

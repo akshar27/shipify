@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 process.env.AUTH_RATE_LIMIT = "1000";
 const { app } = require("../app");
 const { visibleToTraveler } = require("../utils/deliveryState");
+const { codeFor } = require("../utils/handover");
 const { request, prisma, createUser, loginToken } = h;
 
 after(h.cleanup);
@@ -93,9 +94,10 @@ test("only the assigned traveler (or an admin) can complete a delivery", async (
   assert.equal((await patch(`/api/deliveries/${d.id}/complete`, sender.token)).status, 409);
   assert.equal((await statusOf(d.id)).status, "accepted");
 
-  assert.equal((await patch(`/api/deliveries/${d.id}/complete`, carrier.token)).status, 200);
+  const code = codeFor(d.id, (await statusOf(d.id)).handoverSalt);
+  assert.equal((await patch(`/api/deliveries/${d.id}/complete`, carrier.token).send({ code })).status, 200);
   assert.equal((await statusOf(d.id)).status, "delivered");
-  assert.equal((await patch(`/api/deliveries/${d.id}/complete`, carrier.token)).status, 409, "already delivered");
+  assert.equal((await patch(`/api/deliveries/${d.id}/complete`, carrier.token).send({ code })).status, 409, "already delivered");
 
   const d2 = await newDelivery(sender, { paymentStatus: "paid", status: "accepted", travelerId: carrier.id });
   assert.equal((await patch(`/api/deliveries/${d2.id}/complete`, admin.token)).status, 200);

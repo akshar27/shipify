@@ -51,6 +51,7 @@ const mine = { email: { startsWith: "", contains: `.${process.pid}.`, endsWith: 
 async function cleanup() {
   // Children before parents (foreign keys), and only rows that belong to users this process created.
   const theirDeliveries = { OR: [{ sender: mine }, { traveler: mine }] };
+  await prisma.payout.deleteMany({ where: { OR: [{ traveler: mine }, { paidBy: mine }, { delivery: theirDeliveries }] } });
   await prisma.payment.deleteMany({ where: { OR: [{ user: mine }, { delivery: theirDeliveries }] } });
   await prisma.stripeEvent.deleteMany({ where: { id: { contains: `_${process.pid}_` } } });
   await prisma.message.deleteMany({ where: { OR: [{ sender: mine }, { receiver: mine }, { delivery: theirDeliveries }] } });

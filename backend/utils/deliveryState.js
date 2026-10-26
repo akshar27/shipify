@@ -1,3 +1,5 @@
+const { newSalt } = require("./handover");
+
 // The rules for who may see and move a delivery, in one place. Routes call these instead of each writing their own query.
 
 // The jobs a traveler may see: paid and not yet taken (by anyone), or the ones they have taken themselves.
@@ -18,7 +20,7 @@ exports.visibleToTraveler = (userId) => ({
 exports.claimDelivery = async (tx, deliveryId, travelerId, status = "accepted") => {
   const { count } = await tx.delivery.updateMany({
     where: { id: deliveryId, status: "pending", paymentStatus: "paid", travelerId: null, senderId: { not: travelerId } },
-    data: { status, travelerId },
+    data: { status, travelerId, handoverSalt: newSalt() },
   });
   return count === 1;
 };

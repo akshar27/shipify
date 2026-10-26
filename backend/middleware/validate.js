@@ -20,6 +20,10 @@ exports.schemas = {
     weight: z.coerce.number().positive().max(1000),
   }),
   id: z.object({ id: z.string().uuid() }),
+  complete: z.object({ code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code").optional() }),
+  dispute: z.object({ reason: z.string().trim().min(10, "Please describe what went wrong (at least 10 characters)").max(1000) }),
+  payout: z.object({ reference: z.string().trim().min(3, "Enter the payment reference").max(200) }),
+  resolve: z.object({ action: z.enum(["release", "refund"]), note: z.string().trim().min(3, "A note is required").max(1000) }),
   register: z.object({
     name: z.string().trim().min(1, "Name is required").max(100),
     email,

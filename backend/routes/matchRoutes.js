@@ -6,6 +6,7 @@ const axios = require("axios");
 const polyline = require("@mapbox/polyline");
 const { isPointNearRoute } = require("../utils/geo");
 const { visibleToTraveler } = require("../utils/deliveryState");
+const { publicDelivery } = require("../utils/handover");
 
 const MAX_RADIUS_KM = 15; // temporarily increase for debugging
 
@@ -84,7 +85,7 @@ router.get("/matches-for-traveler", verifyToken, async (req, res) => {
           matches.push({
             tripId: trip.id,
             deliveryId: delivery.id,
-            delivery,
+            delivery: publicDelivery(delivery),
           });
           console.log(`✅ Delivery ${delivery.id} matches trip ${trip.id}`);
         } else {
