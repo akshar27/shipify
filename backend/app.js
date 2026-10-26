@@ -3,7 +3,10 @@ const http = require('http');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+const env = require('./config/env'); // validates the environment; exits with a clear message if something is missing
 
+const helmet = require('helmet');
+const { globalLimiter } = require('./middleware/rateLimit');
 const { Server } = require('socket.io');
 const verifyTokenSocket = require('./middleware/socketAuth'); // You’ll create this
 const prisma = require('./config/prisma'); // Assuming this exists
@@ -11,9 +14,12 @@ const prisma = require('./config/prisma'); // Assuming this exists
 const app = express();
 const server = http.createServer(app); // ⬅️ Create HTTP server
 
-// ✅ Wide open CORS for debugging
-app.use(cors());
-app.use(express.json());
+app.set('trust proxy', env.TRUST_PROXY);
+// crossOriginResourcePolicy: the React app on another origin has to be able to load profile photos from here.
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors({ origin: env.corsOrigins }));
+app.use(globalLimiter);
+app.use(express.json({ limit: '100kb' }));
 // Only profile photos are public. Identity documents are never served from here (see utils/documents.js).
 app.use('/uploads/profile', express.static(path.join(__dirname, 'uploads', 'profile')));
 
@@ -35,7 +41,7 @@ app.use('/api/messages', require('./routes/messageRoutes'));
 // ✅ Create Socket.IO server
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000", // Set your frontend domain in production
+    origin: env.corsOrigins,
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -79,5 +85,18 @@ io.on("connection", (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+// Last: anything that throws or calls next(err) ends up here. The client gets a generic message, never a stack or a DB error.
+app.use((err, _req, res, _next) => {
+  if (err.type === 'entity.too.large') return res.status(413).json({ msg: 'Request too large' });
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ msg: 'Invalid JSON' });
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ msg: 'File too large' });
+  console.error(err);
+  res.status(500).json({ msg: 'Something went wrong' });
+});
+
+// Only listen when run directly (node app.js); tests import { app } instead.
+if (require.main === module) {
+  server.listen(env.PORT, () => console.log(`🚀 Server running on port ${env.PORT}`));
+}
+
+module.exports = { app, server, io };

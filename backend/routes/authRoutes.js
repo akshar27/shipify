@@ -12,16 +12,18 @@ const {
 } = require('../controllers/authController');
 
 const verifyToken = require('../middleware/auth');
+const { validate, schemas } = require('../middleware/validate');
+const { authLimiter } = require('../middleware/rateLimit');
 const prisma = require('../config/prisma');
 
 // Public Routes
-router.post('/register', registerUser);
-router.post('/login', loginUser);
-router.post('/forgot-password', forgotPassword);
-router.post('/reset-password', resetPassword);
+router.post('/register', authLimiter, validate(schemas.register), registerUser);
+router.post('/login', authLimiter, validate(schemas.login), loginUser);
+router.post('/forgot-password', authLimiter, validate(schemas.forgotPassword), forgotPassword);
+router.post('/reset-password', authLimiter, validate(schemas.resetPassword), resetPassword);
 router.get('/verify-email/:token', verifyEmail);
-router.post("/resend-verification", resendVerification);
-router.post("/google-login", googleLogin);
+router.post("/resend-verification", authLimiter, validate(schemas.resendVerification), resendVerification);
+router.post("/google-login", authLimiter, googleLogin);
 
 // Protected Route
 router.get('/me', verifyToken, async (req, res) => {

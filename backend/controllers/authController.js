@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../config/prisma');
 const crypto = require('crypto');
 const { sendMail } = require('../utils/mailer');
+const { publicUser } = require('../utils/publicUser');
 
 const { OAuth2Client } = require("google-auth-library");
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
@@ -18,7 +19,7 @@ const generateToken = (user) => {
 
 // ---------------- REGISTER USER -----------------
 exports.registerUser = async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password } = req.body;
 
   try {
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -36,7 +37,7 @@ exports.registerUser = async (req, res) => {
         name,
         email,
         password: hashedPassword,
-        role,
+        role: 'user', // never taken from the request: anyone could otherwise register as an admin
         emailToken,
       }
     });
@@ -57,7 +58,7 @@ exports.registerUser = async (req, res) => {
 
   } catch (err) {
     console.log(err);
-    res.status(500).json({ msg: 'Error registering user', error: err.message });
+    res.status(500).json({ msg: 'Error registering user' });
   }
 };
 
@@ -77,10 +78,10 @@ exports.loginUser = async (req, res) => {
     }
 
     const token = generateToken(user);
-    res.json({ token, user });
+    res.json({ token, user: publicUser(user) });
 
   } catch (err) {
-    res.status(500).json({ msg: 'Login failed', error: err.message });
+    res.status(500).json({ msg: 'Login failed' });
   }
 };
 
@@ -88,9 +89,9 @@ exports.loginUser = async (req, res) => {
 exports.forgotPassword = async (req, res) => {
   const { email } = req.body;
 
+  const GENERIC = { msg: "If that email is registered, a reset link has been sent." };
   const user = await prisma.user.findUnique({ where: { email } });
-  if (!user)
-    return res.status(404).json({ msg: "User not found" });
+  if (!user) return res.json(GENERIC); // same answer either way, so this can't be used to find out who has an account
 
   const token = crypto.randomBytes(32).toString("hex");
   const expiry = new Date(Date.now() + 1000 * 60 * 15);
@@ -112,7 +113,7 @@ exports.forgotPassword = async (req, res) => {
     html: `<p>Click <a href="${resetUrl}">here</a> to reset your password.</p>`
   });
 
-  res.json({ msg: "Reset link sent to email." });
+  res.json(GENERIC);
 };
 
 // ---------------- RESET PASSWORD -----------------
@@ -170,12 +171,9 @@ exports.resendVerification = async (req, res) => {
 
   try {
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(404).json({ msg: "User not found." });
-    }
-
-    if (user.emailVerified) {
-      return res.status(400).json({ msg: "Email is already verified." });
+    const GENERIC = { msg: "If that account needs verifying, a new link has been sent." };
+    if (!user || user.emailVerified) {
+      return res.json(GENERIC); // same answer either way
     }
 
     const newToken = crypto.randomBytes(32).toString("hex");
@@ -194,11 +192,11 @@ exports.resendVerification = async (req, res) => {
       html: `<p>Click <a href="${verifyUrl}">here</a> to verify your email.</p>`
     });
 
-    res.json({ msg: "Verification email resent successfully!" });
+    res.json(GENERIC);
 
   } catch (err) {
     console.log("Resend Error:", err);
-    res.status(500).json({ msg: "Something went wrong", error: err.message });
+    res.status(500).json({ msg: "Something went wrong" });
   }
 };
 
@@ -236,7 +234,7 @@ exports.googleLogin = async (req, res) => {
       { expiresIn: "7d" }
     );
 
-    res.json({ token, user });
+    res.json({ token, user: publicUser(user) });
 
   } catch (err) {
     console.log(err);
