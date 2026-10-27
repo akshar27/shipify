@@ -10,6 +10,7 @@ const { validate, schemas } = require("../middleware/validate");
 const { payoutReadyWhere, splitAmount, confirmWindowMs } = require("../utils/payouts");
 const { publicDelivery } = require("../utils/handover");
 const { getStripe } = require("../utils/stripe");
+const { notify } = require("../utils/notify");
 
 const router = express.Router();
 router.use(verifyToken, requireAdmin);
@@ -69,6 +70,7 @@ router.post("/payouts/:deliveryId", validate(schemas.payout), async (req, res, n
           ...splitAmount(payment.amountCents),
         },
       });
+      notify("paidOut", delivery.id, { payout });
       res.status(201).json(payout);
     } catch (err) {
       if (err.code === "P2002") return res.status(409).json({ msg: "Already paid out" });
@@ -121,6 +123,7 @@ router.post("/disputes/:deliveryId/resolve", validate(schemas.resolve), async (r
 
     if (action === "release") {
       await prisma.delivery.updateMany({ where: { id, status: "disputed" }, data: { status: "confirmed", confirmedAt: new Date(), resolutionNote: `Released to traveler: ${note}` } });
+      notify("confirmed", id);
       return res.json({ msg: "Released: the payout is now due" });
     }
 
@@ -140,6 +143,7 @@ router.post("/disputes/:deliveryId/resolve", validate(schemas.resolve), async (r
       prisma.payment.update({ where: { id: payment.id }, data: { status: "refunded" } }),
       prisma.delivery.update({ where: { id }, data: { status: "refunded", paymentStatus: "refunded", resolutionNote: `Refunded to sender: ${note}` } }),
     ]);
+    notify("refunded", id);
     res.json({ msg: "Refunded to the sender" });
   } catch (err) {
     next(err);

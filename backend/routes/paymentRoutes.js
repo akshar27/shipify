@@ -6,6 +6,7 @@ const ensureVerified = require("../middleware/ensureVerified");
 const requireTerms = require("../middleware/requireTerms");
 const env = require("../config/env");
 const { getStripe } = require("../utils/stripe");
+const { notify } = require("../utils/notify");
 
 const router = express.Router();
 
@@ -117,7 +118,7 @@ async function applyEvent(tx, event) {
         data: { status: "paid", paidAt: new Date(), stripePaymentIntentId: typeof obj.payment_intent === "string" ? obj.payment_intent : null },
       });
       await tx.delivery.update({ where: { id: payment.deliveryId }, data: { paymentStatus: "paid" } });
-      return;
+      return { notify: "paid", deliveryId: payment.deliveryId };
     }
     case "checkout.session.expired": {
       await tx.payment.updateMany({ where: { stripeSessionId: obj.id, status: "pending" }, data: { status: "expired" } });
@@ -148,17 +149,19 @@ router.post("/webhook", async (req, res) => {
     return res.status(400).json({ msg: "Invalid signature" });
   }
 
+  let after;
   try {
     await prisma.$transaction(async (tx) => {
       // Recording the event id and applying it succeed or fail together; a replay hits the primary key and is skipped.
       await tx.stripeEvent.create({ data: { id: event.id, type: event.type } });
-      await applyEvent(tx, event);
+      after = await applyEvent(tx, event);
     });
   } catch (err) {
     if (err.code === "P2002") return res.json({ received: true, duplicate: true });
     console.error("[stripe] webhook processing failed", err);
     return res.status(500).json({ msg: "Processing failed" }); // non-2xx: Stripe retries
   }
+  if (after) notify(after.notify, after.deliveryId); // only once the transaction has committed
   res.json({ received: true });
 });
 

@@ -72,7 +72,7 @@ Things this does not solve, so you can decide how much they matter for the beta:
   automatic timeout or re-listing.
 - **Collusion.** A sender and traveler who are the same person (two accounts) can still run money through the platform; the
   code only proves the recipient had the code, not that a package moved. Keep the beta to people you can identify.
-- **No notifications.** Nobody is emailed when a delivery is accepted, delivered, disputed or paid out. Users have to look.
+- **Status emails are event-driven only.** Paid, accepted, delivered, confirmed, disputed, refunded and paid-out each send an email (`utils/notify.js`; printed to the console without SMTP). There is no scheduler, so nobody gets a *reminder* before the auto-confirm window ends, and a delivery that auto-confirms by timeout sends no "payout is due" email. Sending is fire-and-forget: a mail outage is logged, never surfaced to the user. The mailer is still Gmail SMTP, which is fine for a closed beta (about 500/day) but not for launch: move to a transactional provider.
 - Payouts are manual and only recorded here; the app never moves money to a traveler.
 
 ## Terms, prohibited items and declared value (fourth part of this branch)

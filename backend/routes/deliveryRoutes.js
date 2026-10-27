@@ -9,6 +9,7 @@ const { validate, schemas } = require('../middleware/validate');
 const { claimDelivery } = require('../utils/deliveryState');
 const { newSalt, codeFor, codesMatch, publicDelivery, MAX_ATTEMPTS } = require('../utils/handover');
 const { confirmCutoff } = require('../utils/payouts');
+const { notify } = require('../utils/notify');
 
 // Create delivery
 router.post('/', verifyToken, ensureVerified, requireTerms, validate(schemas.delivery), async (req, res) => {
@@ -136,6 +137,7 @@ router.patch('/:id/accept', verifyToken, ensureVerified, requireTerms, async (re
     if (!claimed) return res.status(409).json({ msg: 'This delivery is not available' });
 
     const delivery = await prisma.delivery.findUnique({ where: { id } });
+    notify('accepted', id);
     res.json({ msg: 'Delivery accepted by traveler', delivery: publicDelivery(delivery) });
   } catch (err) {
     next(err);
@@ -190,6 +192,7 @@ router.patch('/:id/complete', verifyToken, ensureVerified, validate(schemas.comp
 
     const { count } = await prisma.delivery.updateMany({ where: { id, status: { in: CARRYING } }, data: { status: 'delivered', deliveredAt: new Date() } });
     if (count !== 1) return res.status(409).json({ msg: 'This delivery cannot be completed right now' });
+    notify('delivered', id);
 
     res.json({ msg: 'Delivery marked as complete', delivery: publicDelivery(await prisma.delivery.findUnique({ where: { id } })) });
   } catch (err) {
@@ -206,6 +209,7 @@ router.post('/:id/confirm', verifyToken, async (req, res, next) => {
       data: { status: 'confirmed', confirmedAt: new Date() },
     });
     if (count !== 1) return res.status(409).json({ msg: 'This delivery cannot be confirmed' });
+    notify('confirmed', req.params.id);
     res.json({ msg: 'Delivery confirmed', delivery: publicDelivery(await prisma.delivery.findUnique({ where: { id: req.params.id } })) });
   } catch (err) {
     next(err);
@@ -226,6 +230,7 @@ router.post('/:id/dispute', verifyToken, validate(schemas.dispute), async (req, 
       data: { status: 'disputed', disputeReason: req.body.reason, disputedAt: new Date() },
     });
     if (count !== 1) return res.status(409).json({ msg: 'This delivery cannot be disputed (the window may have closed)' });
+    notify('disputed', req.params.id);
     res.json({ msg: 'Thanks, an admin will look into it', delivery: publicDelivery(await prisma.delivery.findUnique({ where: { id: req.params.id } })) });
   } catch (err) {
     next(err);
