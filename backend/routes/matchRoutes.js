@@ -24,7 +24,7 @@ router.get("/matches-for-traveler", verifyToken, async (req, res) => {
       where: visibleToTraveler(req.user.id),
       include: {
         sender: {
-          select: { id: true, name: true, email: true },
+          select: { id: true, name: true }, // no email: a sender's address is not for every traveler who drives past
         },
       },
     });    

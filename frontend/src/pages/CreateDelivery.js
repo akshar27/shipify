@@ -1,3 +1,4 @@
+import useCurrentUser from "../services/useCurrentUser";
 import { useState, useRef, useEffect } from "react";
 import API from "../services/api";
 import { Link, Navigate, useNavigate } from "react-router-dom";
@@ -43,7 +44,8 @@ export default function CreateDelivery() {
   const pickupRef = useRef(null);
   const dropoffRef = useRef(null);
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  const { user, loading: userLoading } = useCurrentUser();
+  if (userLoading) return <div className="container mt-5"><p>Loading...</p></div>;
   if (!user?.isVerified) {
     return <Navigate to="/upload-doc" />;
   }
@@ -55,6 +57,9 @@ export default function CreateDelivery() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    // Travelers are matched by where the package is, so both places must be real points, not just typed text.
+    if (!pickupAddress.trim() || !dropoffAddress.trim()) return setError("Enter both the pickup and the dropoff address.");
+    if (!pickupLatLng || !dropoffLatLng) return setError("Pick each address from the suggestions (or click its spot on the map), so travelers can find your package.");
     try {
       const payload = {
         ...form,
@@ -105,18 +110,15 @@ export default function CreateDelivery() {
     <div className="container mt-5">
       <h2 className="mb-4">Create Delivery Request</h2>
       <form onSubmit={handleSubmit}>
+        <LoadScript googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY} libraries={["places"]}>
         <div className="mb-3">
           <label><strong>Pickup Address:</strong></label>
-          <LoadScript
-            googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
-            libraries={["places"]}
-          >
             <Autocomplete onLoad={(a) => (pickupRef.current = a)} onPlaceChanged={() => handlePlaceChanged("pickup")}>
               <input
                 className="form-control"
                 placeholder="Enter pickup location"
                 value={pickupAddress}
-                onChange={(e) => setPickupAddress(e.target.value)}
+                onChange={(e) => { setPickupAddress(e.target.value); setPickupLatLng(null); }}
               />
             </Autocomplete>
 
@@ -130,21 +132,16 @@ export default function CreateDelivery() {
             >
               {pickupLatLng && <Marker position={pickupLatLng} />}
             </GoogleMap>
-          </LoadScript>
         </div>
 
         <div className="mb-3">
           <label><strong>Dropoff Address:</strong></label>
-          <LoadScript
-            googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
-            libraries={["places"]}
-          >
             <Autocomplete onLoad={(a) => (dropoffRef.current = a)} onPlaceChanged={() => handlePlaceChanged("dropoff")}>
               <input
                 className="form-control"
                 placeholder="Enter dropoff location"
                 value={dropoffAddress}
-                onChange={(e) => setDropoffAddress(e.target.value)}
+                onChange={(e) => { setDropoffAddress(e.target.value); setDropoffLatLng(null); }}
               />
             </Autocomplete>
 
@@ -158,8 +155,8 @@ export default function CreateDelivery() {
             >
               {dropoffLatLng && <Marker position={dropoffLatLng} />}
             </GoogleMap>
-          </LoadScript>
         </div>
+        </LoadScript>
 
         <div className="mb-3">
           <input className="form-control" name="itemType" placeholder="Item Type (e.g. Laptop)" onChange={handleFormChange} required />

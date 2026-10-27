@@ -15,8 +15,8 @@ const person = async (opts = {}) => {
   await prisma.user.update({ where: { id: u.id }, data: { isVerified: true } });
   return { ...u, token: await loginToken(app, u) };
 };
-const goodDelivery = { pickup: "SF", dropoff: "LA", itemType: "book", size: "small", weight: 1, declaredValue: 25, contentsConfirmed: true };
-const goodTrip = { start: "SF", end: "LA", departure: new Date(Date.now() + 86400000).toISOString() };
+const goodDelivery = { pickup: "SF", dropoff: "LA", itemType: "book", size: "small", weight: 1, declaredValue: 25, contentsConfirmed: true, pickupLat: 37.77, pickupLng: -122.4, dropoffLat: 34.05, dropoffLng: -118.24 };
+const goodTrip = { start: "SF", end: "LA", departure: new Date(Date.now() + 86400000).toISOString(), startLat: 37.77, startLng: -122.4, endLat: 34.05, endLng: -118.24 };
 const post = (path, token, body) => request(app).post(path).set(auth(token)).send(body);
 
 // ------------------------------------------------------------------------------------------------ the rules endpoint

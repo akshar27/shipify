@@ -160,10 +160,9 @@ exports.verifyEmail = async (req, res) => {
 
   await prisma.user.update({
     where: { id: user.id },
-    data: {
-      emailVerified: true,
-      emailToken: null,
-    }
+    // The token is kept on purpose: opening the link again (or a mail scanner opening it first) must still say "verified", not
+    // "invalid". It is a random 256-bit value that can only ever mark this one address verified.
+    data: { emailVerified: true },
   });
 
   res.json({ msg: "Email verified successfully" });

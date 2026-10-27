@@ -1,15 +1,18 @@
 import { useState } from "react";
 import API from "../services/api";
+import "../css/MyDeliveries.css"; // the overlay and box styles
 
 export default function RatingModal({ show, onClose, delivery, receiverId, onRated }) {
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   if (!show) return null;
 
   const submitRating = async () => {
-    if (stars === 0) return alert("Please select a rating.");
+    if (stars === 0) return setError("Please select a rating.");
+    setError("");
 
     try {
       setLoading(true);
@@ -25,7 +28,7 @@ export default function RatingModal({ show, onClose, delivery, receiverId, onRat
       onClose();
     } catch (err) {
       console.error("Rating failed", err);
-      alert("Rating failed");
+      setError(err.response?.data?.msg || "Rating failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -57,7 +60,9 @@ export default function RatingModal({ show, onClose, delivery, receiverId, onRat
           onChange={(e) => setComment(e.target.value)}
         />
 
-        <button className="btn btn-primary w-100 mt-2" onClick={submitRating}>
+        {error && <div className="alert alert-danger mt-2 mb-0 py-1" role="alert">{error}</div>}
+
+        <button className="btn btn-primary w-100 mt-2" onClick={submitRating} disabled={loading}>
           {loading ? "Submitting..." : "Submit Rating"}
         </button>
         <button className="btn btn-secondary w-100 mt-2" onClick={onClose}>

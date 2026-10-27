@@ -22,6 +22,9 @@ test("signup -> verify email -> login works, and the role is always 'user'", asy
 
   const verify = await request(app).get(`/api/auth/verify-email/${row.emailToken}`);
   assert.equal(verify.status, 200);
+  const again = await request(app).get(`/api/auth/verify-email/${row.emailToken}`);
+  assert.equal(again.status, 200, "opening the link twice (e.g. a mail scanner first) must not turn into an error");
+  assert.equal((await request(app).get("/api/auth/verify-email/not-a-real-token")).status, 400);
 
   const login = await request(app).post("/api/auth/login").send({ email, password: PASSWORD });
   assert.equal(login.status, 200);
@@ -40,7 +43,7 @@ test("a registered 'admin' hint cannot reach admin endpoints", async () => {
 test("login and register responses never contain the password hash or tokens", async () => {
   const user = await createUser();
   const res = await request(app).post("/api/auth/login").send({ email: user.email, password: user.plainPassword });
-  assert.deepEqual(Object.keys(res.body.user).sort(), ["email", "emailVerified", "id", "isVerified", "name", "profilePicture", "role", "termsAccepted"]);
+  assert.deepEqual(Object.keys(res.body.user).sort(), ["email", "emailVerified", "id", "idSubmitted", "isVerified", "name", "profilePicture", "role", "termsAccepted"]);
   assert.ok(!JSON.stringify(res.body).includes("$2"), "a bcrypt hash leaked");
 });
 

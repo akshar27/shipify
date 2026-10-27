@@ -15,14 +15,19 @@ const num = (message) => z.preprocess((v) => (v === "" || v === null || v === un
 
 const coord = (min, max) => z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number().min(min).max(max).optional());
 
+// Where a package or trip starts and ends has to be a real point: matching skips anything without coordinates, so a delivery saved
+// without them could be paid for and then never reach a single traveler.
+const placeMsg = "Choose the place from the suggestions or click it on the map, so travelers can find it";
+const required = (min, max) => z.preprocess((v) => (v === "" || v === null || v === undefined ? undefined : v), z.coerce.number({ error: placeMsg }).min(min, placeMsg).max(max, placeMsg));
+
 exports.schemas = {
   delivery: z.object({
     pickup: z.string().trim().min(1).max(300),
     dropoff: z.string().trim().min(1).max(300),
-    pickupLat: coord(-90, 90),
-    pickupLng: coord(-180, 180),
-    dropoffLat: coord(-90, 90),
-    dropoffLng: coord(-180, 180),
+    pickupLat: required(-90, 90),
+    pickupLng: required(-180, 180),
+    dropoffLat: required(-90, 90),
+    dropoffLng: required(-180, 180),
     itemType: z.string().trim().min(1).max(100),
     size: z.string().trim().min(1).max(100),
     weight: num("Enter the weight in kg").pipe(z.number().positive("Enter the weight in kg").max(1000, "The weight cannot be more than 1000 kg")),
@@ -34,10 +39,10 @@ exports.schemas = {
     start: z.string().trim().min(1).max(300),
     end: z.string().trim().min(1).max(300),
     departure: z.coerce.date(),
-    startLat: coord(-90, 90),
-    startLng: coord(-180, 180),
-    endLat: coord(-90, 90),
-    endLng: coord(-180, 180),
+    startLat: required(-90, 90),
+    startLng: required(-180, 180),
+    endLat: required(-90, 90),
+    endLng: required(-180, 180),
   }),
   id: z.object({ id: z.string().uuid() }),
   rating: z.object({ deliveryId: z.string().uuid(), rating: z.coerce.number().int().min(1, "Choose 1 to 5 stars").max(5, "Choose 1 to 5 stars"), comment: z.string().trim().max(500).optional() }),

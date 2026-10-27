@@ -8,6 +8,7 @@ const env = require('./config/env'); // validates the environment; exits with a 
 const helmet = require('helmet');
 const { globalLimiter } = require('./middleware/rateLimit');
 const { Server } = require('socket.io');
+const { chatAccess, cleanContent } = require('./utils/chat');
 const verifyTokenSocket = require('./middleware/socketAuth'); // You’ll create this
 const prisma = require('./config/prisma'); // Assuming this exists
 
@@ -70,27 +71,27 @@ io.on("connection", (socket) => {
   console.log(`🟢 ${userId} connected`);
   socket.join(userId);
 
-  socket.on("joinDeliveryRoom", ({ deliveryId }) => {
-    socket.join(`delivery:${deliveryId}`);
-  });  
-
-  socket.on("sendMessage", async ({ deliveryId, receiverId, content }) => {
+  // Only the two people on a delivery may join its room or post in it; the receiver is derived here, never taken from the client.
+  socket.on("joinDeliveryRoom", async ({ deliveryId } = {}) => {
     try {
-      const msg = await prisma.message.create({
-        data: {
-          deliveryId,
-          senderId: userId,
-          receiverId,
-          content,
-        },
-      });
+      if (await chatAccess(userId, deliveryId)) socket.join(`delivery:${deliveryId}`);
+    } catch (error) {
+      console.error("Error joining delivery room:", error.message);
+    }
+  });
 
-      // Send to both parties
-      // io.to(receiverId).emit("receiveMessage", msg);
-      // io.to(userId).emit("receiveMessage", msg);
+  socket.on("sendMessage", async ({ deliveryId, content } = {}) => {
+    try {
+      const text = cleanContent(content);
+      const access = text && (await chatAccess(userId, deliveryId));
+      if (!access) return;
+      const msg = await prisma.message.create({
+        data: { deliveryId, senderId: userId, receiverId: access.otherId, content: text },
+        include: { sender: { select: { name: true, id: true } }, receiver: { select: { name: true, id: true } } },
+      });
       io.to(`delivery:${deliveryId}`).emit("receiveMessage", msg);
     } catch (error) {
-      console.error("🔥 Error sending message:", error.message);
+      console.error("Error sending message:", error.message);
     }
   });
 

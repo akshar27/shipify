@@ -2,46 +2,40 @@ const express = require('express');
 const router = express.Router();
 const verifyToken = require('../middleware/auth');
 const prisma = require('../config/prisma');
+const { chatAccess, cleanContent, MAX_LENGTH } = require('../utils/chat');
 
-// GET messages for a specific delivery between two users
-router.get('/:deliveryId', verifyToken, async (req, res) => {
-  const { deliveryId } = req.params;
+const SENDER_FIELDS = { name: true, id: true };
+
+// Messages of one delivery. Only its sender and its traveler may read them; everyone else gets a 404 so ids cannot be probed.
+router.get('/:deliveryId', verifyToken, async (req, res, next) => {
   try {
+    if (!(await chatAccess(req.user.id, req.params.deliveryId))) return res.status(404).json({ msg: 'Chat not found' });
     const messages = await prisma.message.findMany({
-      where: {
-        deliveryId,
-        OR: [
-          { senderId: req.user.id },
-          { receiverId: req.user.id }
-        ]
-      },
-      orderBy: { timestamp: 'asc' },
-      include: {
-        sender: { select: { name: true, id: true } },
-        receiver: { select: { name: true, id: true } },
-      }
+      where: { deliveryId: req.params.deliveryId },
+      orderBy: { createdAt: 'asc' },
+      include: { sender: { select: SENDER_FIELDS }, receiver: { select: SENDER_FIELDS } },
     });
     res.json(messages);
   } catch (err) {
-    res.status(500).json({ msg: 'Failed to load messages', error: err.message });
+    next(err);
   }
 });
 
-// POST a new message
-router.post('/', verifyToken, async (req, res) => {
-  const { deliveryId, receiverId, content } = req.body;
+// Send a message. The receiver is always the other person on the delivery; a receiverId in the body is ignored.
+router.post('/', verifyToken, async (req, res, next) => {
   try {
+    const { deliveryId, content } = req.body ?? {};
+    const text = cleanContent(content);
+    if (!text) return res.status(400).json({ msg: `Write a message of 1 to ${MAX_LENGTH} characters` });
+    const access = await chatAccess(req.user.id, deliveryId);
+    if (!access) return res.status(404).json({ msg: 'Chat not found' });
     const message = await prisma.message.create({
-      data: {
-        deliveryId,
-        senderId: req.user.id,
-        receiverId,
-        content
-      }
+      data: { deliveryId, senderId: req.user.id, receiverId: access.otherId, content: text },
+      include: { sender: { select: SENDER_FIELDS }, receiver: { select: SENDER_FIELDS } },
     });
     res.status(201).json(message);
   } catch (err) {
-    res.status(500).json({ msg: 'Failed to send message', error: err.message });
+    next(err);
   }
 });
 

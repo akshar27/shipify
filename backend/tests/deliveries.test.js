@@ -23,22 +23,39 @@ const statusOf = async (id) => (await prisma.delivery.findUnique({ where: { id }
 // ------------------------------------------------------------------------------------------------ creating
 test("creating a delivery: the sender is the caller, it starts pending and unpaid, bad input is rejected", async () => {
   const sender = await verifiedUser();
-  const ok = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ pickup: "SF", dropoff: "LA", itemType: "laptop", size: "medium", weight: "2.5", declaredValue: "150", contentsConfirmed: true, pickupLat: "37.77", pickupLng: "-122.4" });
+  const ok = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ pickup: "SF", dropoff: "LA", itemType: "laptop", size: "medium", weight: "2.5", declaredValue: "150", contentsConfirmed: true, pickupLat: "37.77", pickupLng: "-122.4", dropoffLat: 34.05, dropoffLng: "-118.24" });
   assert.equal(ok.status, 201);
   assert.equal(ok.body.senderId, sender.id);
   assert.equal(ok.body.status, "pending");
   assert.equal(ok.body.paymentStatus, "unpaid");
   assert.equal(ok.body.weight, 2.5);
 
-  const injected = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ pickup: "SF", dropoff: "LA", itemType: "x", size: "s", weight: 1, declaredValue: 20, contentsConfirmed: true, paymentStatus: "paid", status: "delivered", senderId: "someone-else" });
+  const injected = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ pickup: "SF", dropoff: "LA", itemType: "x", size: "s", weight: 1, declaredValue: 20, contentsConfirmed: true, pickupLat: 37.77, pickupLng: -122.4, dropoffLat: 34.05, dropoffLng: -118.24, paymentStatus: "paid", status: "delivered", senderId: "someone-else" });
   assert.equal(injected.status, 201);
   assert.equal(injected.body.paymentStatus, "unpaid", "a client must not be able to create a delivery as already paid");
   assert.equal(injected.body.status, "pending");
   assert.equal(injected.body.senderId, sender.id);
 
-  const base = { pickup: "A", dropoff: "B", itemType: "x", size: "s", weight: 1, declaredValue: 20, contentsConfirmed: true };
+  const base = { pickup: "A", dropoff: "B", itemType: "x", size: "s", weight: 1, declaredValue: 20, contentsConfirmed: true, pickupLat: 37.77, pickupLng: -122.4, dropoffLat: 34.05, dropoffLng: -118.24 };
   for (const bad of [{ ...base, pickup: "" }, { ...base, weight: -3 }, { ...base, weight: "abc" }, { ...base, pickupLat: 999 }]) {
     assert.equal((await request(app).post("/api/deliveries").set(auth(sender.token)).send(bad)).status, 400, JSON.stringify(bad));
+  }
+});
+
+test("a delivery or trip without real coordinates is refused, because it could never be matched", async () => {
+  const sender = await verifiedUser();
+  const base = { pickup: "A", dropoff: "B", itemType: "x", size: "s", weight: 1, declaredValue: 20, contentsConfirmed: true, pickupLat: 37.77, pickupLng: -122.4, dropoffLat: 34.05, dropoffLng: -118.24 };
+  for (const field of ["pickupLat", "pickupLng", "dropoffLat", "dropoffLng"]) {
+    for (const value of [undefined, "", null]) {
+      const res = await request(app).post("/api/deliveries").set(auth(sender.token)).send({ ...base, [field]: value });
+      assert.equal(res.status, 400, `${field}=${value}`);
+      assert.match(res.body.msg, /Choose the place/);
+    }
+  }
+  const trip = { start: "A", end: "B", departure: new Date(Date.now() + 86400000).toISOString(), startLat: 37.8, startLng: -122.2, endLat: 37.3, endLng: -121.9 };
+  assert.equal((await request(app).post("/api/trips").set(auth(sender.token)).send(trip)).status, 201);
+  for (const field of ["startLat", "startLng", "endLat", "endLng"]) {
+    assert.equal((await request(app).post("/api/trips").set(auth(sender.token)).send({ ...trip, [field]: undefined })).status, 400, field);
   }
 });
 
@@ -176,7 +193,7 @@ test("accepting a request for a delivery that has since been taken or refunded f
   assert.equal((await prisma.deliveryRequest.findUnique({ where: { id: ra.id } })).status, "pending", "the transaction must roll back");
 });
 
-test("/request/mine shows the sender's name and email but never their password hash or tokens", async () => {
+test("/request/mine shows the sender's name but never their email, password hash or tokens", async () => {
   const sender = await verifiedUser();
   const traveler = await verifiedUser();
   const d = await newDelivery(sender, { paymentStatus: "paid" });
@@ -184,6 +201,6 @@ test("/request/mine shows the sender's name and email but never their password h
   const res = await request(app).get("/api/request/mine").set(auth(traveler.token));
   assert.equal(res.status, 200);
   assert.equal(res.body.length, 1);
-  assert.deepEqual(Object.keys(res.body[0].delivery.sender).sort(), ["email", "id", "name", "profilePicture"]);
+  assert.deepEqual(Object.keys(res.body[0].delivery.sender).sort(), ["id", "name", "profilePicture"]);
   assert.ok(!JSON.stringify(res.body).includes("$2"), "a bcrypt hash leaked");
 });

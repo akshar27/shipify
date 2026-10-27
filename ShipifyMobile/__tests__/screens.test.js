@@ -133,6 +133,16 @@ describe('create delivery', () => {
     await waitFor(() => expect(navigation.replace).toHaveBeenCalledWith('DeliveryDetail', { id: 'd1', justCreated: true }));
   });
 
+  test('an address that cannot be found on the map is reported, and nothing is created or charged', async () => {
+    require('expo-location').geocodeAsync.mockResolvedValueOnce([]);
+    await renderInNav(CreateDeliveryScreen);
+    await fill();
+    await fireEvent.press(screen.getByRole('checkbox'));
+    await press('Create delivery');
+    expect(await screen.findByText(/couldn't find one of those addresses/)).toBeTruthy();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
   test('shows the terms-accepted server error instead of crashing', async () => {
     api.post.mockRejectedValue(axiosError(403, { msg: 'User not verified' }));
     await renderInNav(CreateDeliveryScreen);

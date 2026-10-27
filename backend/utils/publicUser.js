@@ -8,6 +8,7 @@ exports.publicUser = (u) => ({
   role: u.role,
   isVerified: u.isVerified,
   emailVerified: u.emailVerified,
+  idSubmitted: Boolean(u.documentUrl), // an ID has been uploaded (whether or not an admin has approved it yet); the document itself is never exposed
   profilePicture: u.profilePicture,
   termsAccepted: u.termsVersion === TERMS_VERSION,
 });

@@ -30,6 +30,11 @@ export default function CreateDeliveryScreen({ navigation }) {
     setBusy(true);
     try {
       const [from, to] = await Promise.all([geocode(f.pickup), geocode(f.dropoff)]);
+      // Travelers are matched by where the package is. Without both points the delivery would be paid for and never matched.
+      if (from.lat == null || to.lat == null) {
+        setError("We couldn't find one of those addresses on the map, so travelers couldn't be matched to your package. Try a fuller address (street, city, state).");
+        return setBusy(false);
+      }
       const { data } = await api.post('/deliveries', {
         pickup: f.pickup.trim(), dropoff: f.dropoff.trim(),
         pickupLat: from.lat, pickupLng: from.lng, dropoffLat: to.lat, dropoffLng: to.lng,

@@ -40,13 +40,16 @@ export default function MatchesForTraveler() {
     );
   };
 
+  const [actionError, setActionError] = useState("");
+
   const handleAccept = async (deliveryId) => {
+    setActionError("");
     try {
       await API.patch(`/deliveries/${deliveryId}/accept`);
       updateStatus(deliveryId, "accepted");
     } catch (err) {
       console.error("Accept failed", err);
-      alert("Failed to accept request");
+      setActionError(err.response?.data?.msg || "Failed to accept request");
     }
   };
 
@@ -69,7 +72,7 @@ export default function MatchesForTraveler() {
 
   const handleMessageClick = (deliveryId, sender) => {
     if (!sender?.id) {
-      alert("Sender ID not found. Cannot open chat.");
+      setActionError("Sender ID not found. Cannot open chat.");
       return;
     }
 
@@ -86,6 +89,7 @@ export default function MatchesForTraveler() {
   return (
     <div className="container mt-4">
       <h2>Delivery Requests Matching Your Trips</h2>
+      {actionError && <div className="alert alert-danger" role="alert">{actionError}</div>}
 
       {matches.length === 0 ? (
         <p>No matching delivery requests.</p>
@@ -100,7 +104,7 @@ export default function MatchesForTraveler() {
               <div className="card my-3" key={d.id}>
                 <div className="card-body">
                   <h5>
-                    From: {sender.name || "Unknown"} ({sender.email || "N/A"})
+                    From: {sender.name || "Unknown"}
                   </h5>
                   <p>
                     <strong>Pickup:</strong> {d.pickup || "N/A"} <br />
@@ -144,6 +148,7 @@ export default function MatchesForTraveler() {
                               placeholder="123456"
                               value={code}
                               onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                              onKeyDown={(e) => { if (e.key === "Enter" && code.length === 6) handleComplete(d.id); }}
                             />
                             <button className="btn btn-warning" disabled={code.length !== 6} onClick={() => handleComplete(d.id)}>
                               Confirm

@@ -52,7 +52,7 @@ export default function ProfilePage() {
       setTimeout(() => setMessage(""), 2000);
     } catch (err) {
       console.error("Photo upload failed", err);
-      alert("Upload failed");
+      setMessage(err.response?.data?.msg || "Upload failed. Please try again.");
     } finally {
       setUploading(false);
     }
@@ -86,7 +86,7 @@ export default function ProfilePage() {
 
       <h2>Your Profile</h2>
 
-      {message && <div className="alert alert-success">{message}</div>}
+      {message && <div className={`alert alert-${/fail|could not/i.test(message) ? "danger" : "success"}`}>{message}</div>}
 
       <div className="card p-4 mb-4">
         

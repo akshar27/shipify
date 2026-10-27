@@ -128,3 +128,129 @@ test("with no Maps key (development), a trip's route is the straight line, so ma
   assert.equal(pts.length, 41);
   assert.deepEqual(pts[20], { lat: 5, lng: 10 });
 });
+
+// ------------------------------------------------------------------------------------------------ chat
+test("chat: only the sender and traveler of a delivery can read or write its messages, in order, with a server-chosen receiver", async () => {
+  const sender = await person();
+  const traveler = await person();
+  const stranger = await person();
+  const d = await job(sender, traveler, { status: "in-transit" });
+  const open = await prisma.delivery.create({ data: { senderId: sender.id, pickup: "A", dropoff: "B", itemType: "book", size: "small", weight: 1 } });
+  const send = (u, body) => request(app).post("/api/messages").set(auth(u.token)).send(body);
+  const list = (u, id) => request(app).get(`/api/messages/${id}`).set(auth(u.token));
+
+  const first = await send(sender, { deliveryId: d.id, content: "  hello  ", receiverId: stranger.id });
+  assert.equal(first.status, 201);
+  assert.equal(first.body.content, "hello", "trimmed");
+  assert.equal(first.body.receiverId, traveler.id, "a client-chosen receiver is ignored");
+  assert.equal((await send(traveler, { deliveryId: d.id, content: "on my way" })).body.receiverId, sender.id);
+
+  const msgs = await list(traveler, d.id);
+  assert.equal(msgs.status, 200);
+  assert.deepEqual(msgs.body.map((m) => m.content), ["hello", "on my way"]);
+
+  assert.equal((await list(stranger, d.id)).status, 404, "strangers cannot read");
+  assert.equal((await send(stranger, { deliveryId: d.id, content: "spam" })).status, 404, "strangers cannot write");
+  assert.equal((await send(sender, { deliveryId: open.id, content: "anyone?" })).status, 404, "no chat before a traveler is assigned");
+  assert.equal((await list(sender, "not-a-uuid")).status, 404);
+  assert.equal((await send(sender, { deliveryId: d.id, content: "   " })).status, 400);
+  assert.equal((await send(sender, { deliveryId: d.id, content: "x".repeat(2001) })).status, 400);
+  assert.equal((await send(sender, { deliveryId: d.id, content: { $ne: 1 } })).status, 400);
+  assert.equal((await request(app).get(`/api/messages/${d.id}`)).status, 401);
+});
+
+test("chat sockets: a stranger cannot join a delivery's room or post into it", async (t) => {
+  const { io: connect } = require("socket.io-client");
+  const { server, io: sio } = require("../app");
+  const sender = await person();
+  const traveler = await person();
+  const stranger = await person();
+  const d = await job(sender, traveler, { status: "in-transit" });
+  await new Promise((r) => server.listen(0, r));
+  const url = `http://localhost:${server.address().port}`;
+  const open = (u) => new Promise((res, rej) => { const s = connect(url, { auth: { token: u.token }, transports: ["websocket"] }); s.on("connect", () => res(s)); s.on("connect_error", rej); });
+  const [a, b, x] = await Promise.all([open(sender), open(traveler), open(stranger)]);
+  t.after(() => { [a, b, x].forEach((s) => s.close()); sio.close(); }); // io.close() also closes the http server
+
+  const heard = { b: [], x: [] };
+  b.on("receiveMessage", (m) => heard.b.push(m));
+  x.on("receiveMessage", (m) => heard.x.push(m));
+  for (const s of [a, b, x]) s.emit("joinDeliveryRoom", { deliveryId: d.id });
+  await new Promise((r) => setTimeout(r, 200));
+
+  x.emit("sendMessage", { deliveryId: d.id, receiverId: sender.id, content: "injected" });
+  a.emit("sendMessage", { deliveryId: d.id, receiverId: stranger.id, content: "real" });
+  await new Promise((r) => setTimeout(r, 400));
+
+  assert.deepEqual(heard.b.map((m) => m.content), ["real"], "the traveler hears only the sender, not the stranger's injected message");
+  assert.equal(heard.b[0].receiverId, traveler.id, "receiver chosen by the server");
+  assert.deepEqual(heard.x, [], "the stranger heard nothing");
+  const stored = await prisma.message.findMany({ where: { deliveryId: d.id } });
+  assert.deepEqual(stored.map((m) => m.content), ["real"]);
+});
+
+test("travelers never receive a sender's email address from the match or request lists", async () => {
+  const sender = await person();
+  const traveler = await person();
+  const d = await prisma.delivery.create({ data: { senderId: sender.id, pickup: "A", dropoff: "B", pickupLat: 37.77, pickupLng: -122.41, dropoffLat: 37.33, dropoffLng: -121.88, itemType: "x", size: "s", weight: 1, paymentStatus: "paid" } });
+  await prisma.deliveryRequest.create({ data: { deliveryId: d.id, travelerId: traveler.id } });
+  const res = await request(app).get("/api/request/mine").set(auth(traveler.token));
+  assert.equal(res.status, 200);
+  assert.equal(res.body.length, 1);
+  assert.ok(!JSON.stringify(res.body).includes(sender.email), "sender email leaked in /request/mine");
+  assert.equal(res.body[0].delivery.sender.name, sender.name);
+});
+
+test("ratings: a delivery the sender never answered for (past the confirm window) can be rated, a fresh one cannot", async () => {
+  const sender = await person();
+  const traveler = await person();
+  const old = await job(sender, traveler, { status: "delivered", deliveredAt: new Date(Date.now() - 100 * 3600 * 1000) });
+  const fresh = await job(sender, traveler, { status: "delivered", deliveredAt: new Date() });
+  const post = (id) => request(app).post("/api/ratings").set(auth(sender.token)).send({ deliveryId: id, rating: 5 });
+  assert.equal((await post(old.id)).status, 201);
+  assert.equal((await post(fresh.id)).status, 404);
+});
+
+// ------------------------------------------------------------------------------------------------ admin: ID review
+test("admin ID review: approve marks the request approved, reject clears the ID but keeps the account, delete refuses accounts with history", async () => {
+  const admin = await createUser({ role: "admin" });
+  admin.token = await loginToken(app, admin);
+  const member = await person();
+  const other = await person();
+  const call = (method, path, token) => request(app)[method](path).set(auth(token));
+
+  // A submitted ID (this is what the mobile route stores: the user's documentUrl plus a pending request).
+  const submit = async (u) => {
+    await prisma.user.update({ where: { id: u.id }, data: { isVerified: false, documentUrl: "doc:x" } });
+    return prisma.verificationRequest.create({ data: { userId: u.id, fullName: u.name, documentUrl: "doc:x" } });
+  };
+
+  const req1 = await submit(member);
+  assert.equal((await call("post", `/api/admin/reject-user/${member.id}`, member.token)).status, 403, "users cannot reject");
+  assert.equal((await call("post", `/api/admin/reject-user/${member.id}`, admin.token)).status, 200);
+  const after = await prisma.user.findUnique({ where: { id: member.id } });
+  assert.equal(after.documentUrl, null);
+  assert.equal(after.isVerified, false);
+  assert.equal((await prisma.verificationRequest.findUnique({ where: { id: req1.id } })).status, "rejected");
+
+  const req2 = await submit(member);
+  assert.equal((await call("patch", `/api/admin/verify-user/${member.id}`, admin.token)).status, 200);
+  assert.equal((await prisma.user.findUnique({ where: { id: member.id } })).isVerified, true);
+  assert.equal((await prisma.verificationRequest.findUnique({ where: { id: req2.id } })).status, "approved");
+
+  // Unknown ids and non-ids are clean 404s, not 500s that leak a database error.
+  for (const path of ["/api/admin/reject-user", "/api/admin/verify-user"]) {
+    const res = await call(path.includes("reject") ? "post" : "patch", `${path}/00000000-0000-4000-8000-000000000000`, admin.token);
+    assert.equal(res.status, 404);
+    assert.equal(res.body.error, undefined);
+  }
+  assert.equal((await call("patch", "/api/admin/verify-user/not-an-id", admin.token)).status, 404);
+
+  // Deleting someone who has a history is refused (409) instead of crashing on a foreign key.
+  await submit(other);
+  const del = await call("delete", `/api/admin/delete-user/${other.id}`, admin.token);
+  assert.equal(del.status, 409);
+  assert.equal(del.body.error, undefined);
+  assert.ok(await prisma.user.findUnique({ where: { id: other.id } }), "the account is still there");
+  assert.equal((await call("delete", `/api/admin/delete-user/${admin.id}`, admin.token)).status, 409, "admins cannot be deleted here");
+});

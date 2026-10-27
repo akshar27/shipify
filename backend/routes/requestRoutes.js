@@ -63,7 +63,7 @@ router.get('/mine', verifyToken, async (req, res, next) => {
       where: { travelerId: req.user.id },
       include: {
         delivery: {
-          include: { sender: { select: { id: true, name: true, email: true, profilePicture: true } } },
+          include: { sender: { select: { id: true, name: true, profilePicture: true } } },
         },
       },
       orderBy: { createdAt: 'desc' },

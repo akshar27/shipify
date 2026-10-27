@@ -1,3 +1,4 @@
+import { getUser } from "../services/session";
 import { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import API from "../services/api";
@@ -20,7 +21,7 @@ export default function AcceptTerms() {
     setError("");
     try {
       await API.post("/auth/accept-terms", { accept: true });
-      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const user = (getUser() || {});
       localStorage.setItem("user", JSON.stringify({ ...user, termsAccepted: true }));
       navigate(user.role === "admin" ? "/admin" : "/dashboard");
     } catch (err) {

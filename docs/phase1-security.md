@@ -96,6 +96,17 @@ Also found and fixed here: posting a trip never required ID verification or vali
 for unpaid and own deliveries (it bypassed the payment rule and exposed unpaid senders to travelers); the signup form allowed
 6-character passwords while the server requires 8; and signup and delivery creation used blocking `alert()` popups.
 
+## Found by walking every flow in the web and mobile apps (fifth part of this branch)
+
+These were found by running the whole app (a fake Stripe checkout, a real browser, the Expo web build) rather than from the code, and each has a test:
+
+- **Chat was open to anyone logged in.** Any user could read, post into or join the socket room of any delivery, and the message-history route crashed (it sorted by a column that does not exist) and returned the raw database error. Chat now belongs to the sender and the assigned traveler only (`utils/chat.js`), the receiver is chosen by the server, and errors are generic.
+- **A paid delivery could be unmatchable.** Without coordinates a delivery is skipped by matching, yet the API accepted and charged for it. Coordinates are now required for deliveries and trips (web and mobile both say so in plain words if an address cannot be found).
+- **Travelers saw senders' email addresses** in the match and request lists. Names only now.
+- **Rejecting an ID deleted the account**, and failed with a database error for anyone who had a verification request. Reject now clears the ID and keeps the account; delete refuses accounts with history.
+- Ratings could never be left on a delivery that auto-confirmed (it stays `delivered`); they open after the confirm window.
+- Web: a cancelled Stripe checkout landed on a blank page, a corrupted stored login blanked the whole app, an expired login left the user stuck, the ID gate used a stale copy of the user (so an approved person stayed blocked until they logged in again), the rating dialog had no styling, and every `alert()` is now an inline message.
+
 ## Before merging to `main` (production impact)
 
 1. **Set `CORS_ORIGINS` on the server** to the real site origin (e.g. `https://shipify.example.com`). The default is

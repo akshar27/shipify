@@ -45,7 +45,7 @@ router.post("/upload-photo", verifyToken, upload.single("photo"), async (req, re
 
     res.json({ msg: "Profile photo updated", photoUrl: updated.profilePicture });
   } catch (err) {
-    res.status(500).json({ msg: "Upload failed", error: err.message });
+    res.status(500).json({ msg: "Upload failed" });
   }
 });
 

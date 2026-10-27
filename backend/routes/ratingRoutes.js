@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const prisma = require('../config/prisma');
+const { confirmCutoff } = require('../utils/payouts');
 const verifyToken = require('../middleware/auth');
 const { validate, schemas } = require('../middleware/validate');
 
@@ -13,7 +14,14 @@ router.post('/', verifyToken, validate(schemas.rating), async (req, res, next) =
 
   try {
     const delivery = await prisma.delivery.findFirst({
-      where: { id: deliveryId, status: 'confirmed', OR: [{ senderId: req.user.id }, { travelerId: req.user.id }] },
+      where: {
+        id: deliveryId,
+        AND: [
+          { OR: [{ senderId: req.user.id }, { travelerId: req.user.id }] },
+          // Confirmed by the sender, or delivered and the sender's confirm window passed in silence (which counts as confirmed).
+          { OR: [{ status: 'confirmed' }, { status: 'delivered', deliveredAt: { lte: confirmCutoff() } }] },
+        ],
+      },
     });
     if (!delivery) return res.status(404).json({ msg: 'You can rate a delivery once it is confirmed, if you took part in it' });
 

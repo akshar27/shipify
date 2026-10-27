@@ -16,6 +16,13 @@ const STATUS_TEXT = {
   refunded: "Refunded",
 };
 
+// Ratings open once the sender confirmed, or the confirm window passed without a word (the server counts that as confirmed too).
+const canRate = (d) =>
+  d.status === "confirmed" || (d.status === "delivered" && d.deliveredAt && Date.now() - new Date(d.deliveredAt).getTime() > CONFIRM_WINDOW_HOURS * 3600 * 1000);
+
+// An unpaid delivery is not visible to travelers yet, so it must not claim to be waiting for one.
+const statusText = (d) => (d.status === "pending" && d.paymentStatus === "unpaid" ? "Awaiting payment" : STATUS_TEXT[d.status] || d.status);
+
 export default function MyDeliveries() {
   const flash = useLocation().state?.notice; // e.g. "Payment could not be started... press Pay now"
   const [deliveries, setDeliveries] = useState([]);
@@ -113,7 +120,7 @@ export default function MyDeliveries() {
           <p>
             <strong>Pickup:</strong> {d.pickup} <br />
             <strong>Dropoff:</strong> {d.dropoff} <br />
-            <strong>Status:</strong> {STATUS_TEXT[d.status] || d.status} <br />
+            <strong>Status:</strong> {statusText(d)} <br />
             <strong>Payment:</strong> {d.paymentStatus || "unpaid"}
           </p>
 
@@ -171,7 +178,7 @@ export default function MyDeliveries() {
             </div>
           )}
 
-          {(d.status === "delivered" || d.status === "confirmed") &&
+          {canRate(d) &&
             travelerOf(d) &&
             !ratedDeliveries[d.id] && (
               <button className="btn btn-success" onClick={() => openRating(d)}>

@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import Landing from "./pages/Landing";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
@@ -19,6 +19,9 @@ import ProhibitedItems from "./pages/ProhibitedItems";
 import AcceptTerms from "./pages/AcceptTerms";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import { jwtDecode } from "jwt-decode";
+import { clearSession } from "./services/session";
+import PaymentCancel from "./pages/PaymentCancel";
+import NotFound from "./pages/NotFound";
 import ProfilePage from "./pages/Profile";
 import ForgotPassword from "./pages/ForgotPassword";
 import EmailVerification from "./components/EmailVerification";
@@ -30,7 +33,12 @@ import PublicProfile from "./pages/PublicProfile";
 
 function App() {
   const token = localStorage.getItem("token");
-  const user = token ? jwtDecode(token) : null;
+  let user = null;
+  try {
+    user = token ? jwtDecode(token) : null;
+  } catch {
+    clearSession(); // a corrupted token must not take the whole app down
+  }
 
   return (
     <ChatProvider>
@@ -56,6 +64,7 @@ function App() {
           <Route path="/admin" element={<Admin user={user} />} />
           <Route path="/admin/payouts" element={<AdminPayouts />} />
           <Route path="/payment-success" element={<PaymentSuccess />} />
+          <Route path="/payment-cancel" element={<PaymentCancel />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/public-profile/:id" element={<PublicProfile />} />
 
@@ -65,9 +74,10 @@ function App() {
           {/* IMPORTANT ROUTE */}
           <Route path="/verify-email/:token" element={<EmailVerification />} />
           <Route path="/reset-password/:token" element={<ResetPassword />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
         <footer className="text-center small text-muted py-4">
-          <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a> · <a href="/prohibited-items">Prohibited items</a>
+          <Link to="/terms">Terms</Link> · <Link to="/privacy">Privacy</Link> · <Link to="/prohibited-items">Prohibited items</Link>
         </footer>
       </Router>
     </ChatProvider>
