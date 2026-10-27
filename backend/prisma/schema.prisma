@@ -79,6 +79,9 @@ model Delivery {
   handoverAttempts    Int               @default(0)
   deliveredAt         DateTime?
   confirmedAt         DateTime?
+  // Set once by the sweep job (utils/sweep.js) so each reminder email goes out at most once, even with several server instances.
+  reminderSentAt      DateTime?
+  autoConfirmNoticeAt DateTime?
   disputeReason       String?
   disputedAt          DateTime?
   resolutionNote      String?

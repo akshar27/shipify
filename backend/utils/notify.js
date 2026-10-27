@@ -112,6 +112,33 @@ const messages = {
     },
   ],
 
+  reminder: ({ d }) => [
+    {
+      to: d.sender,
+      subject: "Reminder: confirm your delivery or report a problem",
+      lines: [
+        `Your delivery for ${route(d)} was marked delivered. It will be confirmed automatically, and the traveler paid, at ${new Date(d.deliveredAt.getTime() + env.AUTO_CONFIRM_HOURS * 3600e3).toUTCString()}.`,
+        "If something is wrong, report it before then.",
+      ],
+      cta: ["Confirm or report a problem", "/my-deliveries"],
+    },
+  ],
+
+  autoConfirmed: ({ d }) => [
+    {
+      to: d.sender,
+      subject: "Your delivery was confirmed automatically",
+      lines: [`The ${env.AUTO_CONFIRM_HOURS}-hour window for ${route(d)} ended with no report, so it is now confirmed and the traveler will be paid.`],
+      cta: ["View your deliveries", "/my-deliveries"],
+    },
+    {
+      to: d.traveler,
+      subject: "Delivery confirmed: your payout is due",
+      lines: [`The sender didn't report a problem with ${route(d)}, so it is confirmed. Your payout is queued, and we'll email you again when it has been sent.`],
+      cta: ["View your jobs", "/my-requests"],
+    },
+  ],
+
   paidOut: ({ d, payout }) => [
     {
       to: d.traveler,

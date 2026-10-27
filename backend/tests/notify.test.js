@@ -187,3 +187,66 @@ test("a mail outage never fails the request or loses the state change", async ()
   await flush();
   assert.equal((await prisma.delivery.findUnique({ where: { id: d.id } })).status, "delivered");
 });
+
+// ------------------------------------------------------------------------------------------------ time-based emails
+const { sweep } = require("../utils/sweep");
+const HOUR = 3600 * 1000;
+const ago = (h) => new Date(Date.now() - h * HOUR);
+
+test("the sweep reminds the sender in the last day of the window, once, and never earlier", async () => {
+  const sender = await person();
+  const traveler = await person();
+  const early = await job(sender, traveler, { status: "delivered", deliveredAt: ago(10) }); // 62h left
+  const late = await job(sender, traveler, { status: "delivered", deliveredAt: ago(60) }); // 12h left
+
+  await sweep();
+  await flush();
+  const mails = to(sender);
+  assert.equal(mails.length, 1);
+  assert.match(mails[0].subject, /Reminder/);
+  assert.equal((await prisma.delivery.findUnique({ where: { id: early.id } })).reminderSentAt, null);
+  assert.ok((await prisma.delivery.findUnique({ where: { id: late.id } })).reminderSentAt);
+
+  await sweep();
+  await flush();
+  assert.equal(to(sender).length, 1, "a second pass must not remind again");
+});
+
+test("two overlapping sweeps still send a reminder only once", async () => {
+  const sender = await person();
+  const traveler = await person();
+  await job(sender, traveler, { status: "delivered", deliveredAt: ago(60) });
+  await Promise.all([sweep(), sweep(), sweep()]);
+  await flush();
+  assert.equal(to(sender).length, 1);
+});
+
+test("when the window passes in silence, sender and traveler are told once; disputed and unpaid ones are left alone", async () => {
+  const sender = await person();
+  const traveler = await person();
+  const quiet = await job(sender, traveler, { status: "delivered", deliveredAt: ago(80) });
+  await job(sender, traveler, { status: "disputed", deliveredAt: ago(80), disputedAt: new Date() });
+  await job(sender, traveler, { status: "delivered", deliveredAt: ago(80), paymentStatus: "refunded" });
+
+  await sweep();
+  await flush();
+  assert.equal(to(sender).length, 1);
+  assert.match(to(sender)[0].subject, /automatically/);
+  assert.equal(to(traveler).length, 1);
+  assert.match(to(traveler)[0].subject, /payout is due/);
+  assert.ok((await prisma.delivery.findUnique({ where: { id: quiet.id } })).autoConfirmNoticeAt);
+
+  await sweep();
+  await flush();
+  assert.equal(to(sender).length, 1);
+  assert.equal(to(traveler).length, 1);
+});
+
+test("a delivery the sender already confirmed gets no reminder", async () => {
+  const sender = await person();
+  const traveler = await person();
+  await job(sender, traveler, { status: "confirmed", deliveredAt: ago(60), confirmedAt: ago(50) });
+  await sweep();
+  await flush();
+  assert.equal(outbox.filter((m) => [sender.email, traveler.email].includes(m.to)).length, 0);
+});

@@ -101,6 +101,7 @@ app.use((err, _req, res, _next) => {
 // Only listen when run directly (node app.js); tests import { app } instead.
 if (require.main === module) {
   server.listen(env.PORT, () => console.log(`🚀 Server running on port ${env.PORT}`));
+  require('./utils/sweep').startSweep();
 }
 
 module.exports = { app, server, io };
