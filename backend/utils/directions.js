@@ -7,7 +7,8 @@ const polyline = require("@mapbox/polyline");
 const TTL_MS = 24 * 3600 * 1000;
 const MAX_ENTRIES = 500;
 const cache = new Map();
-let fetcher = (params) => axios.get("https://maps.googleapis.com/maps/api/directions/json", { params, timeout: 8000 }).then((r) => r.data);
+const defaultFetcher = (params) => axios.get("https://maps.googleapis.com/maps/api/directions/json", { params, timeout: 8000 }).then((r) => r.data);
+let fetcher = defaultFetcher;
 
 exports.setFetcherForTests = (fn) => {
   fetcher = fn;
@@ -21,6 +22,15 @@ exports.routePoints = async (trip, now = Date.now()) => {
   const key = [trip.startLat, trip.startLng, trip.endLat, trip.endLng].map(r3).join(",");
   const hit = cache.get(key);
   if (hit && now - hit.at < TTL_MS) return hit.points;
+
+  // Development only: with no Maps key, treat the route as the straight line between the endpoints so the traveler flow can be
+  // exercised locally. In production a missing key is a configuration error and fails (the trip is skipped), never a silent downgrade.
+  if (!process.env.GOOGLE_MAPS_API_KEY && process.env.NODE_ENV !== "production" && fetcher === defaultFetcher) {
+    return Array.from({ length: 41 }, (_, i) => ({
+      lat: trip.startLat + ((trip.endLat - trip.startLat) * i) / 40,
+      lng: trip.startLng + ((trip.endLng - trip.startLng) * i) / 40,
+    }));
+  }
 
   try {
     const data = await fetcher({

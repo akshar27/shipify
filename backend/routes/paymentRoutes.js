@@ -10,7 +10,8 @@ const { notify } = require("../utils/notify");
 
 const router = express.Router();
 
-const NOT_CONFIGURED = { msg: "Payments are not configured (STRIPE_SECRET_KEY is not set)." };
+// Shown to end users, so it must not name server settings; the operator learns the cause from the log.
+const NOT_CONFIGURED = { msg: "Payments are temporarily unavailable. Please try again later." };
 const CHECKOUT_REUSE_MS = 20 * 60 * 1000; // a Checkout session stays open for 24h; reusing a fresh one stops double-clicks creating duplicates
 
 /* ------------------------------------------------------------------------------------------------
@@ -18,7 +19,10 @@ const CHECKOUT_REUSE_MS = 20 * 60 * 1000; // a Checkout session stays open for 2
 ------------------------------------------------------------------------------------------------ */
 router.post("/create-checkout-session", verifyToken, ensureVerified, requireTerms, async (req, res, next) => {
   const stripe = getStripe();
-  if (!stripe) return res.status(503).json(NOT_CONFIGURED);
+  if (!stripe) {
+    console.error("[stripe] checkout requested but STRIPE_SECRET_KEY is not set");
+    return res.status(503).json(NOT_CONFIGURED);
+  }
 
   const parsed = z.object({ deliveryId: z.string().uuid() }).safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ msg: "deliveryId is required" });

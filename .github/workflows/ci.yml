@@ -62,3 +62,21 @@ jobs:
       - run: npm run build
         env:
           CI: "true"
+
+  mobile:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ShipifyMobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ShipifyMobile/package-lock.json
+      - run: npm ci
+      - run: npm test
+      # No emulator in CI: bundling both platforms catches anything that would not compile on a phone.
+      - run: npx expo export --platform ios --output-dir /tmp/ios
+      - run: npx expo export --platform android --output-dir /tmp/android

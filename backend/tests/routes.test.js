@@ -106,3 +106,25 @@ test("a Google failure skips that trip instead of failing the page, and is not c
   await request(app).get("/api/match/matches-for-traveler").set(auth(traveler.token));
   assert.equal(n, 2, "failures are retried, not cached");
 });
+
+test("/auth/me returns the public user including isVerified, never the password hash", async () => {
+  const u = await person();
+  const res = await request(app).get("/api/auth/me").set(auth(u.token));
+  assert.equal(res.status, 200);
+  assert.equal(res.body.isVerified, true);
+  assert.equal(res.body.termsAccepted, true);
+  assert.equal(res.body.password, undefined);
+  assert.equal(res.body.emailToken, undefined);
+});
+
+test("with no Maps key (development), a trip's route is the straight line, so matching still works", async () => {
+  const saved = process.env.GOOGLE_MAPS_API_KEY;
+  delete process.env.GOOGLE_MAPS_API_KEY;
+  delete require.cache[require.resolve("../utils/directions")];
+  const fresh = require("../utils/directions");
+  const pts = await fresh.routePoints({ startLat: 0, startLng: 0, endLat: 10, endLng: 20 });
+  process.env.GOOGLE_MAPS_API_KEY = saved || "";
+  if (!saved) delete process.env.GOOGLE_MAPS_API_KEY;
+  assert.equal(pts.length, 41);
+  assert.deepEqual(pts[20], { lat: 5, lng: 10 });
+});

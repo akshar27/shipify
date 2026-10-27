@@ -1,5 +1,6 @@
 // routes/auth.js
 const express = require('express');
+const { publicUser } = require('../utils/publicUser');
 const router = express.Router();
 const {
   registerUser,
@@ -30,14 +31,11 @@ router.post("/google-login", authLimiter, googleLogin);
 router.post('/accept-terms', verifyToken, authLimiter, validate(schemas.acceptTerms), acceptTerms);
 
 // Protected Route
+// The current user, as the app should see them now (isVerified changes when an admin approves their ID).
 router.get('/me', verifyToken, async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { id: true, name: true, email: true, role: true, createdAt: true, termsVersion: true }
-    });
-    const { termsVersion, ...rest } = user;
-    res.json({ ...rest, termsAccepted: termsVersion === TERMS_VERSION });
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    res.json(publicUser(user));
   } catch {
     res.status(500).json({ msg: 'Failed to fetch user' });
   }
