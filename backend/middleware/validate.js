@@ -40,6 +40,7 @@ exports.schemas = {
     endLng: coord(-180, 180),
   }),
   id: z.object({ id: z.string().uuid() }),
+  rating: z.object({ deliveryId: z.string().uuid(), rating: z.coerce.number().int().min(1, "Choose 1 to 5 stars").max(5, "Choose 1 to 5 stars"), comment: z.string().trim().max(500).optional() }),
   complete: z.object({ code: z.string().regex(/^\d{6}$/, "Enter the 6-digit code").optional() }),
   dispute: z.object({ reason: z.string().trim().min(10, "Please describe what went wrong (at least 10 characters)").max(1000) }),
   payout: z.object({ reference: z.string().trim().min(3, "Enter the payment reference").max(200) }),

@@ -18,6 +18,16 @@ app.set('trust proxy', env.TRUST_PROXY);
 // crossOriginResourcePolicy: the React app on another origin has to be able to load profile photos from here.
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: env.corsOrigins }));
+// Liveness for nginx / pm2 / an uptime monitor. Before the rate limiter so frequent polling is never throttled; says nothing about internals.
+app.get('/health', async (_req, res) => {
+  try {
+    await require('./config/prisma').$queryRaw`SELECT 1`;
+    res.json({ ok: true });
+  } catch {
+    res.status(503).json({ ok: false });
+  }
+});
+
 app.use(globalLimiter);
 // Stripe signs the exact bytes it sends, so this one route must see the raw body, before the JSON parser touches it.
 app.use('/api/payments/webhook', express.raw({ type: 'application/json', limit: '1mb' }));
@@ -39,7 +49,7 @@ app.use('/api/legal', require('./routes/legalRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/payments', require('./routes/paymentRoutes'));
 app.use('/api/dashboard', require('./routes/dashboardRoutes'));
-app.use('/rating', require('./routes/ratingRoutes'));
+app.use('/api/ratings', require('./routes/ratingRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 
 // ✅ Create Socket.IO server

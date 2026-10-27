@@ -7,7 +7,6 @@ import Dashboard from "./pages/Dashboard";
 import CreateDelivery from "./pages/CreateDelivery";
 import CreateTrip from "./pages/CreateTrip";
 import MyDeliveries from "./pages/MyDeliveries";
-import MatchTrips from "./pages/MatchTrips";
 import MyRequests from "./pages/MyRequests";
 import UploadDocument from "./pages/UploadDocument";
 import AdminVerify from "./pages/AdminVerify";
@@ -51,7 +50,6 @@ function App() {
           <Route path="/create-delivery" element={<CreateDelivery />} />
           <Route path="/create-trip" element={<CreateTrip />} />
           <Route path="/my-deliveries" element={<MyDeliveries />} />
-          <Route path="/match/:deliveryId" element={<MatchTrips />} />
           <Route path="/my-requests" element={<MyRequests />} />
           <Route path="/upload-doc" element={<UploadDocument />} />
           <Route path="/admin/verify/:id" element={<AdminVerify />} />

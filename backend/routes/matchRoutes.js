@@ -2,13 +2,12 @@ const express = require("express");
 const router = express.Router();
 const verifyToken = require("../middleware/auth");
 const prisma = require("../config/prisma");
-const axios = require("axios");
-const polyline = require("@mapbox/polyline");
+const { routePoints: getRoutePoints } = require("../utils/directions");
 const { isPointNearRoute } = require("../utils/geo");
 const { visibleToTraveler } = require("../utils/deliveryState");
 const { publicDelivery } = require("../utils/handover");
 
-const MAX_RADIUS_KM = 15; // temporarily increase for debugging
+const MAX_RADIUS_KM = 15;
 
 router.get("/matches-for-traveler", verifyToken, async (req, res) => {
   try {
@@ -31,7 +30,6 @@ router.get("/matches-for-traveler", verifyToken, async (req, res) => {
     });    
 
     const matches = [];
-    const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
     for (const trip of trips) {
       if (!trip.startLat || !trip.endLat || !trip.startLng || !trip.endLng) {
@@ -39,24 +37,11 @@ router.get("/matches-for-traveler", verifyToken, async (req, res) => {
         continue;
       }
 
-      // 1️⃣ Fetch route from Google with full resolution
-      const directionsRes = await axios.get("https://maps.googleapis.com/maps/api/directions/json", {
-        params: {
-          origin: `${trip.startLat},${trip.startLng}`,
-          destination: `${trip.endLat},${trip.endLng}`,
-          key: apiKey,
-          overview: "full", // high resolution polyline
-        },
-      });
-
-      const route = directionsRes.data.routes[0];
-      if (!route) {
-        console.log(`❌ No route found for trip ${trip.id}`);
+      const routePoints = await getRoutePoints(trip);
+      if (!routePoints) {
+        console.log(`❌ No route for trip ${trip.id}`);
         continue;
       }
-
-      const decodedPoints = polyline.decode(route.overview_polyline.points);
-      const routePoints = decodedPoints.map(([lat, lng]) => ({ lat, lng }));
 
       for (const delivery of deliveries) {
         if (
@@ -97,7 +82,7 @@ router.get("/matches-for-traveler", verifyToken, async (req, res) => {
     res.json(matches);
   } catch (err) {
     console.error("🔥 Geo Match Error:", err);
-    res.status(500).json({ msg: "Failed to fetch geo-matched deliveries", error: err.message });
+    res.status(500).json({ msg: "Failed to fetch geo-matched deliveries" });
   }
 });
 
