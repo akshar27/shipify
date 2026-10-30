@@ -1,9 +1,11 @@
+import { getUser } from "../services/session";
 import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import API from "../services/api";
+import { API_ORIGIN } from "../config";
 
 // ✅ Create a single socket instance (outside the component to avoid re‑connecting)
-const socket = io("http://localhost:5000", {
+const socket = io(API_ORIGIN, {
   auth: {
     token: localStorage.getItem("token"), // token from login
   },
@@ -13,7 +15,7 @@ const socket = io("http://localhost:5000", {
 export default function ChatBox({ deliveryId, receiverId }) {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
-  const currentUser = JSON.parse(localStorage.getItem("user")); // contains id, email etc.
+  const currentUser = getUser(); // contains id, email etc.
 
   // ✅ Load old messages & subscribe to new ones
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function ChatBox({ deliveryId, receiverId }) {
         }}
       >
         {messages.map((m) => {
-          const isMine = m.senderId === currentUser.id;
+          const isMine = m.senderId === currentUser?.id;
           return (
             <div
               key={m.id}
@@ -109,6 +111,8 @@ export default function ChatBox({ deliveryId, receiverId }) {
           className="form-control"
           value={newMsg}
           onChange={(e) => setNewMsg(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") sendMessage(); }}
+          maxLength={2000}
           placeholder="Type your message"
         />
         <button className="btn btn-primary" onClick={sendMessage}>

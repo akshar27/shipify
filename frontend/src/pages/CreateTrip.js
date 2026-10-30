@@ -1,3 +1,4 @@
+import useCurrentUser from "../services/useCurrentUser";
 import { useState, useRef } from "react";
 import API from "../services/api";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -21,8 +22,10 @@ export default function CreateTrip() {
   const startRef = useRef(null);
   const endRef = useRef(null);
   const navigate = useNavigate();
+  const [error, setError] = useState("");
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  const { user, loading: userLoading } = useCurrentUser();
+  if (userLoading) return <div className="container mt-5"><p>Loading...</p></div>;
   if (!user?.isVerified) {
     return <Navigate to="/upload-doc" />;
   }
@@ -45,6 +48,8 @@ export default function CreateTrip() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    if (!startLatLng || !endLatLng) return setError("Pick the start and end from the suggestions (or click each spot on the map), so senders near your route can find you.");
     try {
       const payload = {
         start: startAddress,
@@ -57,16 +62,16 @@ export default function CreateTrip() {
       };
 
       await API.post("/trips", payload);
-      alert("Trip created successfully!");
       navigate("/dashboard");
     } catch (err) {
-      alert(err.response?.data?.msg || "Failed to create trip");
+      setError(err.response?.data?.msg || "Failed to create trip");
     }
   };
 
   return (
     <div className="container mt-5">
       <h2 className="mb-4">Add Your Trip</h2>
+      {error && <div className="alert alert-danger" role="alert">{error}</div>}
       <form onSubmit={handleSubmit}>
         <LoadScript
           googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
@@ -81,7 +86,7 @@ export default function CreateTrip() {
                 className="form-control"
                 placeholder="Enter start location"
                 value={startAddress}
-                onChange={(e) => setStartAddress(e.target.value)}
+                onChange={(e) => { setStartAddress(e.target.value); setStartLatLng(null); }}
                 required
               />
             </Autocomplete>
@@ -104,7 +109,7 @@ export default function CreateTrip() {
                 className="form-control"
                 placeholder="Enter end location"
                 value={endAddress}
-                onChange={(e) => setEndAddress(e.target.value)}
+                onChange={(e) => { setEndAddress(e.target.value); setEndLatLng(null); }}
                 required
               />
             </Autocomplete>

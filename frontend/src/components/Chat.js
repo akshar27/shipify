@@ -1,3 +1,4 @@
+import { getUser } from "../services/session";
 import { useEffect, useState, useRef } from "react";
 import API from "../services/api";
 import { useParams } from "react-router-dom";
@@ -16,7 +17,7 @@ export default function ChatPage() {
       setMessages(res.data);
 
       // Set receiver (assuming current user is always sender)
-      const currentUser = JSON.parse(localStorage.getItem("user"));
+      const currentUser = getUser();
       const other = res.data.find((msg) => msg.sender.id !== currentUser.id);
       if (other) setReceiverId(other.sender.id);
     } catch (err) {
@@ -55,7 +56,7 @@ export default function ChatPage() {
 
       <div className="border p-3 rounded mb-3 bg-light" style={{ height: 400, overflowY: "scroll" }}>
         {messages.map((msg, i) => {
-          const isMine = msg.sender.id === JSON.parse(localStorage.getItem("user")).id;
+          const isMine = msg.sender.id === getUser()?.id;
           return (
             <div
               key={i}

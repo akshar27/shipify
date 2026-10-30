@@ -20,7 +20,15 @@
     box-shadow: 0 4px 10px rgba(0,0,0,0.2);
   }
   
-  .star-row {
+  .star-row,
+  .stars {
     text-align: center;
+  }
+
+  .stars .star {
+    cursor: pointer;
+    font-size: 2rem;
+    padding: 0 4px;
+    user-select: none;
   }
   

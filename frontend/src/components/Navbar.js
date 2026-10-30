@@ -1,15 +1,15 @@
+import { getUser, clearSession } from "../services/session";
 import { Link, useNavigate } from "react-router-dom";
 import { FaUserCircle } from "react-icons/fa";
 import logo from "../assets/shipify_logo.png";
 
 export default function Navbar() {
   const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = getUser();
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
+    clearSession();
     navigate("/login");
   };
 
@@ -53,11 +53,16 @@ export default function Navbar() {
 
             {/* Logged in as Admin */}
             {token && user?.role === "admin" && (
+              <>
+              <li className="nav-item">
+                <Link className="nav-link" to="/admin/payouts">Payouts</Link>
+              </li>
               <li className="nav-item">
                 <button onClick={handleLogout} className="btn btn-sm btn-light">
                   Logout
                 </button>
               </li>
+              </>
             )}
 
             {/* Logged in as Regular User */}

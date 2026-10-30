@@ -19,9 +19,13 @@ model User {
   bio            String?
   phone          String?
 
-  deliveries       Delivery[]
-  trips            Trip[]
-  deliveryRequests DeliveryRequest[] @relation("UserRequests")
+  deliveries        Delivery[]        @relation("SentDeliveries")
+  carriedDeliveries Delivery[]        @relation("CarriedDeliveries")
+  payments          Payment[]
+  payoutsReceived   Payout[]          @relation("PayoutsReceived")
+  payoutsMade       Payout[]          @relation("PayoutsMade")
+  trips             Trip[]
+  deliveryRequests  DeliveryRequest[] @relation("UserRequests")
 
   isVerified       Boolean   @default(false)
   documentUrl      String?
@@ -29,8 +33,13 @@ model User {
   resetTokenExpiry DateTime?
 
   // ⭐ REQUIRED FOR EMAIL VERIFICATION  
-  emailToken      String?  
-  emailVerified   Boolean   @default(false)
+  emailToken    String?
+  emailVerified Boolean @default(false)
+
+  // Which version of the Terms (and prohibited-items rules) this user agreed to, and when. Bumping TERMS_VERSION in
+  // config/legal.js makes everyone accept again before they can create or take a delivery.
+  termsVersion    String?
+  termsAcceptedAt DateTime?
 
   givenRatings    Rating[] @relation("GivenRatings")
   receivedRatings Rating[] @relation("ReceivedRatings")
@@ -41,25 +50,46 @@ model User {
   verificationRequests VerificationRequest[]
 }
 
-
 model Delivery {
-  id         String            @id @default(uuid())
-  senderId   String
-  sender     User              @relation(fields: [senderId], references: [id])
-  pickup     String
-  dropoff    String
-  pickupLat  Float?
-  pickupLng  Float?
-  dropoffLat Float?
-  dropoffLng Float?
-  itemType   String
-  size       String
-  weight     Float
-  status     String            @default("pending")
-  createdAt  DateTime          @default(now())
-  requests   DeliveryRequest[] @relation("DeliveryRequests")
-  ratings    Rating[]
-  messages   Message[]
+  id                  String            @id @default(uuid())
+  senderId            String
+  sender              User              @relation("SentDeliveries", fields: [senderId], references: [id])
+  // The traveler who accepted the job. Null until someone does; only this user may complete the delivery.
+  travelerId          String?
+  traveler            User?             @relation("CarriedDeliveries", fields: [travelerId], references: [id])
+  pickup              String
+  dropoff             String
+  pickupLat           Float?
+  pickupLng           Float?
+  dropoffLat          Float?
+  dropoffLng          Float?
+  itemType            String
+  size                String
+  weight              Float
+  // What the sender declared: a value under the platform cap, and that the contents are not on the prohibited list.
+  declaredValueCents  Int?
+  contentsConfirmedAt DateTime?
+  status              String            @default("pending")
+  // unpaid | paid | refunded. Set only by the Stripe webhook, never by a browser redirect. Travelers only ever see paid deliveries.
+  paymentStatus       String            @default("unpaid")
+  createdAt           DateTime          @default(now())
+  // Handover: the sender shows a 6-digit code (derived from this salt, never stored) to the recipient, who gives it to the
+  // traveler at drop-off. Entering it marks the delivery delivered. Wrong guesses are counted and locked at 5.
+  handoverSalt        String?
+  handoverAttempts    Int               @default(0)
+  deliveredAt         DateTime?
+  confirmedAt         DateTime?
+  // Set once by the sweep job (utils/sweep.js) so each reminder email goes out at most once, even with several server instances.
+  reminderSentAt      DateTime?
+  autoConfirmNoticeAt DateTime?
+  disputeReason       String?
+  disputedAt          DateTime?
+  resolutionNote      String?
+  payout              Payout?
+  payments            Payment[]
+  requests            DeliveryRequest[] @relation("DeliveryRequests")
+  ratings             Rating[]
+  messages            Message[]
 }
 
 model Trip {
@@ -123,4 +153,50 @@ model Message {
   sender   User     @relation("SentMessages", fields: [senderId], references: [id])
   receiver User     @relation("ReceivedMessages", fields: [receiverId], references: [id])
   delivery Delivery @relation(fields: [deliveryId], references: [id])
+}
+
+// One row per Stripe Checkout session. The amount is decided by the server, and a row only becomes "paid" through the
+// signature-verified webhook after the amount and currency Stripe reports match what we asked for.
+model Payment {
+  id                    String    @id @default(uuid())
+  deliveryId            String
+  delivery              Delivery  @relation(fields: [deliveryId], references: [id])
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id])
+  amountCents           Int
+  currency              String    @default("usd")
+  status                String    @default("pending") // pending | paid | expired | refunded
+  stripeSessionId       String    @unique
+  stripePaymentIntentId String?
+  checkoutUrl           String?
+  createdAt             DateTime  @default(now())
+  paidAt                DateTime?
+
+  @@index([deliveryId])
+  @@index([stripePaymentIntentId])
+}
+
+// Every webhook event id we have processed, so Stripe retrying or replaying an event cannot apply it twice.
+model StripeEvent {
+  id         String   @id
+  type       String
+  receivedAt DateTime @default(now())
+}
+
+// Manual payouts for the MVP: an admin pays the traveler outside the app (bank transfer etc.) and records it here.
+// The unique deliveryId means a delivery can be paid out once, even if two admins click at the same time.
+model Payout {
+  id         String   @id @default(uuid())
+  deliveryId String   @unique
+  delivery   Delivery @relation(fields: [deliveryId], references: [id])
+  travelerId String
+  traveler   User     @relation("PayoutsReceived", fields: [travelerId], references: [id])
+  grossCents Int
+  feeCents   Int
+  netCents   Int
+  currency   String
+  reference  String
+  paidById   String
+  paidBy     User     @relation("PayoutsMade", fields: [paidById], references: [id])
+  createdAt  DateTime @default(now())
 }

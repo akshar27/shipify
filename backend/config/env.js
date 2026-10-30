@@ -1,0 +1,45 @@
+// Fails fast at boot instead of failing later in a request handler with a confusing error.
+const { z } = require("zod");
+
+const schema = z.object({
+  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  JWT_SECRET: z.string().min(16, "JWT_SECRET must be at least 16 characters"),
+  PORT: z.coerce.number().default(5000),
+  CLIENT_URL: z.string().url().default("http://localhost:3000"),
+  // Comma-separated browser origins allowed to call the API and open sockets.
+  CORS_ORIGINS: z.string().default("http://localhost:3000"),
+  // Number of reverse proxies in front of the app (nginx etc.), so rate limiting sees real client IPs. 0 = none.
+  TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+  // Requests per 15 minutes per IP: everything, and the login/register/reset endpoints specifically.
+  // Payments. Without STRIPE_SECRET_KEY the payment routes answer 503; the webhook also needs STRIPE_WEBHOOK_SECRET.
+  STRIPE_SECRET_KEY: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  // What a sender pays per delivery, in cents. Decided here, never by the browser.
+  DELIVERY_FEE_CENTS: z.coerce.number().int().min(50).max(100000).default(1000),
+  PAYMENT_CURRENCY: z.string().length(3).toLowerCase().default("usd"),
+  // After a delivery is marked delivered, the sender has this long to confirm or report a problem; after it, the delivery counts as confirmed.
+  AUTO_CONFIRM_HOURS: z.coerce.number().min(0).default(72),
+  // The platform's cut of DELIVERY_FEE_CENTS; the rest is what the traveler is owed.
+  PLATFORM_FEE_PERCENT: z.coerce.number().min(0).max(100).default(20),
+  // The most a sender may declare an item to be worth; higher-value items are prohibited.
+  MAX_ITEM_VALUE_CENTS: z.coerce.number().int().min(100).default(20000),
+  // Shown on the Terms and Privacy pages. Set both before launch.
+  COMPANY_NAME: z.string().optional(),
+  SUPPORT_EMAIL: z.string().email().optional(),
+  GLOBAL_RATE_LIMIT: z.coerce.number().int().min(1).default(600),
+  AUTH_RATE_LIMIT: z.coerce.number().int().min(1).default(20),
+});
+
+const parsed = schema.safeParse(process.env);
+if (!parsed.success) {
+  const problems = parsed.error.issues.map((i) => `  - ${i.path.join(".")}: ${i.message}`).join("\n");
+  console.error(`Invalid environment configuration:\n${problems}`);
+  process.exit(1);
+}
+if (parsed.data.NODE_ENV === "production" && parsed.data.JWT_SECRET.length < 32) {
+  console.error("Invalid environment configuration:\n  - JWT_SECRET must be at least 32 characters in production");
+  process.exit(1);
+}
+
+module.exports = { ...parsed.data, corsOrigins: parsed.data.CORS_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean) };

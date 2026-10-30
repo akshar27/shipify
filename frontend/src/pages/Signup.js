@@ -1,6 +1,6 @@
 import { useState } from "react";
 import API from "../services/api";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 import FormError from "../components/FormError";
 import { GoogleLogin } from "@react-oauth/google";
@@ -17,6 +17,8 @@ export default function Signup() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [loading, setLoading] = useState(false);
+  const [acceptTerms, setAcceptTerms] = useState(false);
+  const [created, setCreated] = useState(false);
 
   const navigate = useNavigate();
 
@@ -34,8 +36,13 @@ export default function Signup() {
       return;
     }
 
-    if (form.password.length < 6) {
-      setErrorMsg("Password must be at least 6 characters.");
+    if (form.password.length < 8) {
+      setErrorMsg("Password must be at least 8 characters.");
+      return;
+    }
+
+    if (!acceptTerms) {
+      setErrorMsg("Please accept the Terms and the prohibited-items rules to create an account.");
       return;
     }
 
@@ -45,11 +52,10 @@ export default function Signup() {
         name: form.name,
         email: form.email,
         password: form.password,
-        role: "user",
+        acceptTerms: true,
       });
 
-      alert("Account created! Please check your email to verify your account.");
-      navigate("/login");
+      setCreated(true); // an inline message instead of a blocking alert()
 
     } catch (err) {
       setErrorMsg(err.response?.data?.msg || "Registration failed.");
@@ -68,13 +74,23 @@ export default function Signup() {
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
 
-      navigate("/dashboard");
+      navigate(user.termsAccepted ? "/dashboard" : "/accept-terms");
 
     } catch (error) {
       console.log(error);
       setErrorMsg("Google Signup failed.");
     }
   };
+
+  if (created) {
+    return (
+      <div className="container mt-5 text-center">
+        <h2>Check your email</h2>
+        <p>We sent a link to <strong>{form.email}</strong>. Open it to verify your account, then log in.</p>
+        <Link to="/login" className="btn btn-primary">Go to login</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="container mt-5">
@@ -152,6 +168,20 @@ export default function Signup() {
               >
                 {showConfirm ? <FaEyeSlash /> : <FaEye />}
               </span>
+            </div>
+
+            <div className="form-check mb-3">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                id="acceptTerms"
+                checked={acceptTerms}
+                onChange={(e) => { setAcceptTerms(e.target.checked); setErrorMsg(""); }}
+              />
+              <label className="form-check-label" htmlFor="acceptTerms">
+                I accept the <Link to="/terms" target="_blank">Terms</Link>, the <Link to="/privacy" target="_blank">Privacy Policy</Link> and
+                the <Link to="/prohibited-items" target="_blank">prohibited-items rules</Link>.
+              </label>
             </div>
 
             <button type="submit" className="btn btn-primary w-100" disabled={loading}>

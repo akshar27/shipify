@@ -3,6 +3,7 @@ const router = express.Router();
 const verifyToken = require('../middleware/auth');
 const prisma = require('../config/prisma');
 const { uploadToS3 } = require("../utils/s3Upload");
+const { storeDocument, resolveDocumentUrl } = require("../utils/documents");
 const upload = require("../config/multer");
 
 /* ============================
@@ -12,19 +13,19 @@ router.post('/upload-doc', verifyToken, upload.single('document'), async (req, r
   try {
     if (!req.file) return res.status(400).json({ msg: "No file uploaded" });
 
-    const s3Url = await uploadToS3(req.file, "documents");
+    const docRef = await storeDocument(req.file);
 
     await prisma.user.update({
       where: { id: req.user.id },
       data: {
-        documentUrl: s3Url,
+        documentUrl: docRef,
         isVerified: false, // mark as pending
       },
     });
 
-    res.json({ msg: 'Document uploaded to S3. Pending admin verification.', documentUrl: s3Url });
+    res.json({ msg: 'Document uploaded. Pending admin verification.' });
   } catch (err) {
-    res.status(500).json({ msg: 'Upload failed', error: err.message });
+    res.status(err.status || 500).json({ msg: err.status ? err.message : 'Upload failed' });
   }
 });
 
@@ -44,7 +45,7 @@ router.post("/upload-photo", verifyToken, upload.single("photo"), async (req, re
 
     res.json({ msg: "Profile photo updated", photoUrl: updated.profilePicture });
   } catch (err) {
-    res.status(500).json({ msg: "Upload failed", error: err.message });
+    res.status(500).json({ msg: "Upload failed" });
   }
 });
 
@@ -77,7 +78,7 @@ router.get('/profile', verifyToken, async (req, res) => {
         bio: user.bio,
         phone: user.phone,
         profilePicture: user.profilePicture,
-        documentUrl: user.documentUrl,
+        documentUrl: resolveDocumentUrl(user.documentUrl, `${req.protocol}://${req.get('host')}`),
         isVerified: user.isVerified,
         emailVerified: user.emailVerified,
         avgRating,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import API from "../services/api";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 
 export default function EmailVerification() {
   const { token } = useParams();
@@ -35,7 +35,7 @@ export default function EmailVerification() {
       )}
       {status === "error" && (
         <div className="alert alert-danger">
-          ❌ Invalid or expired verification link.
+          ❌ Invalid or expired verification link. <Link to="/resend-verification">Send me a new one</Link>
         </div>
       )}
     </div>

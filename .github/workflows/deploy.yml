@@ -6,7 +6,11 @@ on:
       - main
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
+    needs: ci # nothing is deployed unless the backend tests and the frontend build pass
     runs-on: ubuntu-latest
 
     steps:

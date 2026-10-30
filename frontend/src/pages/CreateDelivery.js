@@ -1,6 +1,8 @@
-import { useState, useRef } from "react";
+import useCurrentUser from "../services/useCurrentUser";
+import { useState, useRef, useEffect } from "react";
 import API from "../services/api";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+import { getRules, money } from "../services/legal";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   GoogleMap,
@@ -10,17 +12,29 @@ import {
 } from "@react-google-maps/api";
 
 // Initialize Stripe
-const stripePromise = loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY);
+// Only when a key is set: loadStripe(undefined) throws at import time and takes the whole app down.
+const stripePromise = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY
+  ? loadStripe(process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY)
+  : null;
 
 const mapStyle = { height: "300px", width: "100%" };
 const defaultCenter = { lat: 37.7749, lng: -122.4194 };
 
 export default function CreateDelivery() {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     itemType: "",
     size: "",
     weight: "",
+    declaredValue: "",
   });
+  const [contentsConfirmed, setContentsConfirmed] = useState(false);
+  const [rules, setRules] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    getRules().then(setRules).catch(() => {});
+  }, []);
 
   const [pickupAddress, setPickupAddress] = useState("");
   const [dropoffAddress, setDropoffAddress] = useState("");
@@ -30,7 +44,8 @@ export default function CreateDelivery() {
   const pickupRef = useRef(null);
   const dropoffRef = useRef(null);
 
-  const user = JSON.parse(localStorage.getItem("user"));
+  const { user, loading: userLoading } = useCurrentUser();
+  if (userLoading) return <div className="container mt-5"><p>Loading...</p></div>;
   if (!user?.isVerified) {
     return <Navigate to="/upload-doc" />;
   }
@@ -41,9 +56,14 @@ export default function CreateDelivery() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
+    // Travelers are matched by where the package is, so both places must be real points, not just typed text.
+    if (!pickupAddress.trim() || !dropoffAddress.trim()) return setError("Enter both the pickup and the dropoff address.");
+    if (!pickupLatLng || !dropoffLatLng) return setError("Pick each address from the suggestions (or click its spot on the map), so travelers can find your package.");
     try {
       const payload = {
         ...form,
+        contentsConfirmed,
         pickup: pickupAddress,
         dropoff: dropoffAddress,
         pickupLat: pickupLatLng?.lat,
@@ -53,17 +73,20 @@ export default function CreateDelivery() {
       };
 
       const res = await API.post("/deliveries", payload);
-      const deliveryId = res.data.deliveryId;
+      const deliveryId = res.data.id; // the API returns the delivery itself, not { deliveryId }
 
-      const stripe = await stripePromise;
-      const session = await API.post("/payments/create-checkout-session", {
-        deliveryId,
-        amount: 10.0,
-      });
-
-      window.location.href = session.data.url;
+      try {
+        if (stripePromise) await stripePromise;
+        // The server decides the price; the browser only says which delivery to pay for.
+        const session = await API.post("/payments/create-checkout-session", { deliveryId });
+        window.location.href = session.data.url;
+      } catch (payErr) {
+        // The delivery exists but is unpaid: it can be paid from My Deliveries.
+        // Not an alert(): it blocks the page. Keep the message and take them to the delivery they can pay for.
+        navigate("/my-deliveries", { state: { notice: (payErr.response?.data?.msg || "Payment could not be started") + " Your delivery was saved; press Pay now when you are ready." } });
+      }
     } catch (err) {
-      alert(err.response?.data?.msg || "Failed to create delivery or payment");
+      setError(err.response?.data?.msg || "Failed to create delivery");
     }
   };
 
@@ -87,18 +110,15 @@ export default function CreateDelivery() {
     <div className="container mt-5">
       <h2 className="mb-4">Create Delivery Request</h2>
       <form onSubmit={handleSubmit}>
+        <LoadScript googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY} libraries={["places"]}>
         <div className="mb-3">
           <label><strong>Pickup Address:</strong></label>
-          <LoadScript
-            googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
-            libraries={["places"]}
-          >
             <Autocomplete onLoad={(a) => (pickupRef.current = a)} onPlaceChanged={() => handlePlaceChanged("pickup")}>
               <input
                 className="form-control"
                 placeholder="Enter pickup location"
                 value={pickupAddress}
-                onChange={(e) => setPickupAddress(e.target.value)}
+                onChange={(e) => { setPickupAddress(e.target.value); setPickupLatLng(null); }}
               />
             </Autocomplete>
 
@@ -112,21 +132,16 @@ export default function CreateDelivery() {
             >
               {pickupLatLng && <Marker position={pickupLatLng} />}
             </GoogleMap>
-          </LoadScript>
         </div>
 
         <div className="mb-3">
           <label><strong>Dropoff Address:</strong></label>
-          <LoadScript
-            googleMapsApiKey={process.env.REACT_APP_GOOGLE_MAPS_API_KEY}
-            libraries={["places"]}
-          >
             <Autocomplete onLoad={(a) => (dropoffRef.current = a)} onPlaceChanged={() => handlePlaceChanged("dropoff")}>
               <input
                 className="form-control"
                 placeholder="Enter dropoff location"
                 value={dropoffAddress}
-                onChange={(e) => setDropoffAddress(e.target.value)}
+                onChange={(e) => { setDropoffAddress(e.target.value); setDropoffLatLng(null); }}
               />
             </Autocomplete>
 
@@ -140,8 +155,8 @@ export default function CreateDelivery() {
             >
               {dropoffLatLng && <Marker position={dropoffLatLng} />}
             </GoogleMap>
-          </LoadScript>
         </div>
+        </LoadScript>
 
         <div className="mb-3">
           <input className="form-control" name="itemType" placeholder="Item Type (e.g. Laptop)" onChange={handleFormChange} required />
@@ -153,7 +168,21 @@ export default function CreateDelivery() {
           <input className="form-control" name="weight" type="number" step="0.1" placeholder="Weight (kg)" onChange={handleFormChange} required />
         </div>
 
-        <button type="submit" className="btn btn-primary w-100">Create & Pay</button>
+        <div className="mb-3">
+          <label className="form-label">Declared value{rules ? ` (up to ${money(rules.maxItemValueCents, rules.currency)})` : ""}</label>
+          <input className="form-control" name="declaredValue" type="number" min="1" step="0.01" placeholder="What the item is worth" onChange={handleFormChange} required />
+        </div>
+
+        <div className="form-check mb-3">
+          <input className="form-check-input" type="checkbox" id="contents" checked={contentsConfirmed} onChange={(e) => setContentsConfirmed(e.target.checked)} />
+          <label className="form-check-label" htmlFor="contents">
+            I confirm this package contains nothing on the <Link to="/prohibited-items" target="_blank">prohibited items list</Link> and that the
+            declared value is accurate.
+          </label>
+        </div>
+
+        {error && <div className="alert alert-danger">{error}</div>}
+        <button type="submit" className="btn btn-primary w-100" disabled={!contentsConfirmed}>Create & Pay</button>
       </form>
     </div>
   );
