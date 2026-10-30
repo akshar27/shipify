@@ -1,6 +1,6 @@
 # Shipify mobile (iOS and Android)
 
-One React Native codebase (Expo SDK 54) for both platforms. It talks to the same backend as the website.
+One React Native codebase (Expo SDK 58) for both platforms. It talks to the same backend as the website.
 
 **What it does:** sign up with the terms gate, ID verification upload, send a package (create, pay with Stripe Checkout, show the
 handover code, confirm or report a problem, rate), and carry packages (post a trip, see paid packages along the route, accept,
